@@ -206,6 +206,18 @@ export async function getLatestExternalData(
   return (data as ExternalDataSnapshot) ?? null;
 }
 
+export async function getLatestModelOutput(marketId: string): Promise<ModelOutput | null> {
+  const { data, error } = await db()
+    .from("model_outputs")
+    .select("*")
+    .eq("market_id", marketId)
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  return (data as ModelOutput) ?? null;
+}
+
 export async function insertModelOutput(output: Omit<ModelOutput, "id">): Promise<ModelOutput> {
   const { data, error } = await db()
     .from("model_outputs")

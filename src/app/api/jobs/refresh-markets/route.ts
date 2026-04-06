@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { validateCronSecret } from "@/lib/utils/auth";
 import { KalshiClient } from "@/lib/kalshi/client";
+import { kalshiMarketToQuotePrices, kalshiVolume } from "@/lib/kalshi/quotes";
 import { upsertMarket, insertMarketSnapshot } from "@/lib/supabase/db";
 
 function parseThresholdFromTitle(title: string): number | null {
@@ -75,21 +76,18 @@ export async function POST(req: Request) {
       });
       upserted++;
 
-      const yesBid = km.yes_bid / 100;
-      const yesAsk = km.yes_ask / 100;
-      const noBid = km.no_bid / 100;
-      const noAsk = km.no_ask / 100;
+      const q = kalshiMarketToQuotePrices(km);
 
       await insertMarketSnapshot({
         market_id: market.id,
         captured_at: new Date().toISOString(),
-        yes_bid: yesBid,
-        yes_ask: yesAsk,
-        no_bid: noBid,
-        no_ask: noAsk,
-        last_price: km.last_price / 100,
-        implied_probability: yesAsk,
-        volume: km.volume,
+        yes_bid: q.yes_bid,
+        yes_ask: q.yes_ask,
+        no_bid: q.no_bid,
+        no_ask: q.no_ask,
+        last_price: q.last_price,
+        implied_probability: q.yes_ask,
+        volume: kalshiVolume(km),
         raw_json: km as unknown as Record<string, unknown>,
       });
       snapshots++;
