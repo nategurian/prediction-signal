@@ -106,7 +106,7 @@ export class KalshiClient {
     do {
       const resp = await this.getMarkets({
         series_ticker: "KXHIGHNY",
-        status: "open",
+        status: "active",
         cursor,
         limit: 100,
       });

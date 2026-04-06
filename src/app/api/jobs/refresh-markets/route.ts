@@ -21,6 +21,12 @@ function parseBucketBounds(title: string): { lower: number | null; upper: number
   return { lower: null, upper: null };
 }
 
+/** Kalshi returns tradable markets as `active` (and sometimes `open`). */
+function isKalshiMarketOpen(status: string | undefined): boolean {
+  const s = status?.toLowerCase() ?? "";
+  return s === "open" || s === "active";
+}
+
 function parseDateFromTicker(ticker: string): string | null {
   const match = ticker.match(/(\d{2})([A-Z]{3})(\d{2})/);
   if (!match) return null;
@@ -64,7 +70,7 @@ export async function POST(req: Request) {
         bucket_upper: buckets.upper,
         close_time: km.close_time,
         settlement_time: km.expiration_time,
-        status: km.status === "open" ? "active" : "closed",
+        status: isKalshiMarketOpen(km.status) ? "active" : "closed",
         raw_json: km as unknown as Record<string, unknown>,
       });
       upserted++;
