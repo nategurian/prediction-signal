@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { validateCronSecret } from "@/lib/utils/auth";
 import { KalshiClient } from "@/lib/kalshi/client";
-import { kalshiMarketToQuotePrices, kalshiVolume } from "@/lib/kalshi/quotes";
+import type { KalshiMarket } from "@/lib/kalshi/types";
+import { kalshiMarketToQuotePrices, kalshiVolume, needsFullMarketQuoteFetch } from "@/lib/kalshi/quotes";
 import { deriveMarketMetadataFromKalshi } from "@/lib/kalshi/marketMetadata";
 import { upsertMarket, insertMarketSnapshot } from "@/lib/supabase/db";
 
@@ -36,13 +37,19 @@ export async function POST(req: Request) {
     let snapshots = 0;
 
     for (const km of markets) {
-      const derived = deriveMarketMetadataFromKalshi(km);
-      const marketDate = parseDateFromTicker(km.ticker);
+      let detail: KalshiMarket = km;
+      if (needsFullMarketQuoteFetch(km)) {
+        const full = await client.getMarket(km.ticker);
+        if (full) detail = full;
+      }
+
+      const derived = deriveMarketMetadataFromKalshi(detail);
+      const marketDate = parseDateFromTicker(detail.ticker);
 
       const market = await upsertMarket({
-        ticker: km.ticker,
-        title: km.title,
-        category: km.category ?? "weather",
+        ticker: detail.ticker,
+        title: detail.title,
+        category: detail.category ?? "weather",
         niche_key: "weather_daily_temp",
         city_key: "nyc",
         market_structure: derived.market_structure,
@@ -50,14 +57,14 @@ export async function POST(req: Request) {
         threshold_value: derived.threshold_value,
         bucket_lower: derived.bucket_lower,
         bucket_upper: derived.bucket_upper,
-        close_time: km.close_time,
-        settlement_time: km.expiration_time,
-        status: isKalshiMarketOpen(km.status) ? "active" : "closed",
-        raw_json: km as unknown as Record<string, unknown>,
+        close_time: detail.close_time,
+        settlement_time: detail.expiration_time,
+        status: isKalshiMarketOpen(detail.status) ? "active" : "closed",
+        raw_json: detail as unknown as Record<string, unknown>,
       });
       upserted++;
 
-      const q = kalshiMarketToQuotePrices(km);
+      const q = kalshiMarketToQuotePrices(detail);
 
       await insertMarketSnapshot({
         market_id: market.id,
@@ -68,8 +75,8 @@ export async function POST(req: Request) {
         no_ask: q.no_ask,
         last_price: q.last_price,
         implied_probability: q.yes_ask,
-        volume: kalshiVolume(km),
-        raw_json: km as unknown as Record<string, unknown>,
+        volume: kalshiVolume(detail),
+        raw_json: detail as unknown as Record<string, unknown>,
       });
       snapshots++;
     }

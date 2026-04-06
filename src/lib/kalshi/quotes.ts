@@ -40,6 +40,15 @@ export function kalshiMarketToQuotePrices(km: KalshiMarket): KalshiQuotePrices {
   };
 }
 
+/**
+ * Kalshi `GET /markets` list responses often omit top-of-book *_dollars fields.
+ * `GET /markets/{ticker}` returns full quotes — use when this returns true.
+ */
+export function needsFullMarketQuoteFetch(km: KalshiMarket): boolean {
+  const q = kalshiMarketToQuotePrices(km);
+  return q.yes_ask == null || q.no_ask == null;
+}
+
 export function kalshiVolume(km: KalshiMarket): number {
   if (km.volume != null && !Number.isNaN(Number(km.volume))) return Number(km.volume);
   if (km.volume_fp != null && km.volume_fp !== "") {

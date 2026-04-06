@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { kalshiMarketToQuotePrices, kalshiVolume } from "../quotes";
+import { kalshiMarketToQuotePrices, kalshiVolume, needsFullMarketQuoteFetch } from "../quotes";
 import type { KalshiMarket } from "../types";
 
 describe("kalshiMarketToQuotePrices", () => {
@@ -58,6 +58,48 @@ describe("kalshiMarketToQuotePrices", () => {
     const q = kalshiMarketToQuotePrices(km);
     expect(q.yes_bid).toBe(0.45);
     expect(q.yes_ask).toBe(0.55);
+  });
+});
+
+describe("needsFullMarketQuoteFetch", () => {
+  it("is false when both asks parse from *_dollars", () => {
+    const km = {
+      ticker: "T",
+      title: "t",
+      subtitle: "",
+      status: "active",
+      yes_ask_dollars: "0.40",
+      no_ask_dollars: "0.55",
+      event_ticker: "E",
+      category: "c",
+      close_time: "",
+      expiration_time: "",
+      settlement_timer_seconds: 0,
+      result: "",
+      can_close_early: true,
+      yes_sub_title: "",
+      no_sub_title: "",
+    } as KalshiMarket;
+    expect(needsFullMarketQuoteFetch(km)).toBe(false);
+  });
+
+  it("is true when list payload omits asks", () => {
+    const km = {
+      ticker: "T",
+      title: "t",
+      subtitle: "",
+      status: "active",
+      event_ticker: "E",
+      category: "c",
+      close_time: "",
+      expiration_time: "",
+      settlement_timer_seconds: 0,
+      result: "",
+      can_close_early: true,
+      yes_sub_title: "",
+      no_sub_title: "",
+    } as KalshiMarket;
+    expect(needsFullMarketQuoteFetch(km)).toBe(true);
   });
 });
 
