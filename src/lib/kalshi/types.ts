@@ -27,6 +27,10 @@ export interface KalshiMarket {
   can_close_early: boolean;
   yes_sub_title: string;
   no_sub_title: string;
+  /** Present on many contracts; use for bucket vs threshold instead of title-only parsing. */
+  strike_type?: string;
+  floor_strike?: number;
+  cap_strike?: number;
 }
 
 export interface KalshiEvent {

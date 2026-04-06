@@ -2,25 +2,8 @@ import { NextResponse } from "next/server";
 import { validateCronSecret } from "@/lib/utils/auth";
 import { KalshiClient } from "@/lib/kalshi/client";
 import { kalshiMarketToQuotePrices, kalshiVolume } from "@/lib/kalshi/quotes";
+import { deriveMarketMetadataFromKalshi } from "@/lib/kalshi/marketMetadata";
 import { upsertMarket, insertMarketSnapshot } from "@/lib/supabase/db";
-
-function parseThresholdFromTitle(title: string): number | null {
-  const match = title.match(/(\d+)\s*°?\s*F/i);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-function parseMarketStructure(title: string): "binary_threshold" | "bucket_range" {
-  if (title.toLowerCase().includes("between") || title.toLowerCase().includes("range")) {
-    return "bucket_range";
-  }
-  return "binary_threshold";
-}
-
-function parseBucketBounds(title: string): { lower: number | null; upper: number | null } {
-  const match = title.match(/(\d+)\s*°?\s*F?\s*(?:and|to|-)\s*(\d+)\s*°?\s*F/i);
-  if (match) return { lower: parseInt(match[1], 10), upper: parseInt(match[2], 10) };
-  return { lower: null, upper: null };
-}
 
 /** Kalshi returns tradable markets as `active` (and sometimes `open`). */
 function isKalshiMarketOpen(status: string | undefined): boolean {
@@ -53,9 +36,7 @@ export async function POST(req: Request) {
     let snapshots = 0;
 
     for (const km of markets) {
-      const structure = parseMarketStructure(km.title);
-      const threshold = parseThresholdFromTitle(km.title);
-      const buckets = parseBucketBounds(km.title);
+      const derived = deriveMarketMetadataFromKalshi(km);
       const marketDate = parseDateFromTicker(km.ticker);
 
       const market = await upsertMarket({
@@ -64,11 +45,11 @@ export async function POST(req: Request) {
         category: km.category ?? "weather",
         niche_key: "weather_daily_temp",
         city_key: "nyc",
-        market_structure: structure,
+        market_structure: derived.market_structure,
         market_date: marketDate,
-        threshold_value: threshold,
-        bucket_lower: buckets.lower,
-        bucket_upper: buckets.upper,
+        threshold_value: derived.threshold_value,
+        bucket_lower: derived.bucket_lower,
+        bucket_upper: derived.bucket_upper,
         close_time: km.close_time,
         settlement_time: km.expiration_time,
         status: isKalshiMarketOpen(km.status) ? "active" : "closed",
