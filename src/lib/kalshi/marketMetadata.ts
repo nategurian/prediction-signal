@@ -12,10 +12,9 @@ export interface DerivedMarketMetadata {
  * Title-only parsing misses many real Kalshi weather contracts (e.g. "54-55°" without "between").
  */
 export function deriveMarketMetadataFromKalshi(km: KalshiMarket): DerivedMarketMetadata {
-  const raw = km as Record<string, unknown>;
-  const strikeType = String(raw.strike_type ?? "").toLowerCase();
-  const floor = typeof raw.floor_strike === "number" ? raw.floor_strike : null;
-  const cap = typeof raw.cap_strike === "number" ? raw.cap_strike : null;
+  const strikeType = String(km.strike_type ?? "").toLowerCase();
+  const floor = typeof km.floor_strike === "number" ? km.floor_strike : null;
+  const cap = typeof km.cap_strike === "number" ? km.cap_strike : null;
 
   if (strikeType === "between" && floor != null && cap != null) {
     return {
