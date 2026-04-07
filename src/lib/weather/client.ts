@@ -59,6 +59,7 @@ export async function fetchWeatherForecast(): Promise<WeatherForecast> {
     currentTemp,
     hourlyTemps,
     forecastTimestamp: new Date().toISOString(),
+    utcOffsetSeconds: data.utc_offset_seconds ?? 0,
     rawResponse: data,
   };
 }

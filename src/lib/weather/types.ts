@@ -29,5 +29,7 @@ export interface WeatherForecast {
   currentTemp: number | null;
   hourlyTemps: { time: string; temp: number }[];
   forecastTimestamp: string;
+  /** Seconds east of UTC for the API response location (varies with DST). */
+  utcOffsetSeconds: number;
   rawResponse: OpenMeteoResponse;
 }

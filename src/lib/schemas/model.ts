@@ -8,6 +8,7 @@ export const modelOutputSchema = z.object({
   confidence_score: z.number().min(0).max(1),
   feature_json: z.record(z.string(), z.unknown()),
   model_version: z.string(),
+  external_data_id: z.string().uuid().nullable().optional(),
 });
 
 export const featurePayloadSchema = z.object({
@@ -16,6 +17,9 @@ export const featurePayloadSchema = z.object({
   forecast_timestamp: z.string(),
   previous_forecast_high: z.number().nullable(),
   forecast_revision: z.number().nullable(),
+  lead_time_hours_to_forecast_local_noon: z.number().nullable().optional(),
+  climatology_normal_high_f: z.number().nullable().optional(),
+  forecast_anomaly_vs_climatology_f: z.number().nullable().optional(),
   sigma: z.number(),
   threshold: z.number().nullable(),
   bucket_lower: z.number().nullable(),

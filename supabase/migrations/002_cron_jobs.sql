@@ -31,10 +31,10 @@ SELECT cron.schedule(
   $sql$, 'YOUR_APP_URL/api/jobs/refresh-markets')
 );
 
--- Refresh external weather data every 15 minutes
+-- Refresh external weather data every 10 minutes
 SELECT cron.schedule(
   'refresh_external_data',
-  '*/15 * * * *',
+  '*/10 * * * *',
   format($sql$
     SELECT net.http_post(
       url := %L,
@@ -47,10 +47,10 @@ SELECT cron.schedule(
   $sql$, 'YOUR_APP_URL/api/jobs/refresh-external-data')
 );
 
--- Run full pipeline every 15 minutes (offset by 2 min to let external data land)
+-- Run full pipeline every 10 minutes (offset by 3 min to let external data land)
 SELECT cron.schedule(
   'run_pipeline',
-  '2-59/15 * * * *',
+  '3-59/10 * * * *',
   format($sql$
     SELECT net.http_post(
       url := %L,

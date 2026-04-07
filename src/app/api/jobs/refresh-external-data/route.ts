@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { validateCronSecret } from "@/lib/utils/auth";
 import { fetchWeatherForecast } from "@/lib/weather/client";
+import { buildNormalizedExternalJson } from "@/lib/weather/normalizeExternal";
+import { validateForecastPayload } from "@/lib/weather/validateForecast";
 import {
   insertExternalDataSnapshot,
   getLatestExternalData,
@@ -19,17 +21,26 @@ export async function POST(req: Request) {
       ? (previous.normalized_json as Record<string, unknown>).forecasted_high as number | null
       : null;
 
-    const normalizedJson = {
-      forecasted_high: forecast.forecastedHigh,
-      forecast_date: forecast.forecastDate,
-      current_temp: forecast.currentTemp,
-      previous_forecast_high: previousForecastHigh,
-      forecast_revision: previousForecastHigh != null
-        ? forecast.forecastedHigh - previousForecastHigh
-        : null,
-      forecast_timestamp: forecast.forecastTimestamp,
-      hourly_temps_count: forecast.hourlyTemps.length,
-    };
+    const validation = validateForecastPayload({
+      forecastedHigh: forecast.forecastedHigh,
+      forecastDate: forecast.forecastDate,
+      currentTemp: forecast.currentTemp,
+      forecastTimestamp: forecast.forecastTimestamp,
+    });
+
+    if (!validation.ok) {
+      console.error("refresh-external-data validation failed:", validation.errors);
+      return NextResponse.json(
+        { error: "Forecast validation failed", details: validation.errors },
+        { status: 422 }
+      );
+    }
+
+    const normalizedJson = buildNormalizedExternalJson(
+      forecast,
+      previousForecastHigh,
+      appConfig.cityKey
+    );
 
     const snapshot = await insertExternalDataSnapshot({
       niche_key: appConfig.nicheKey,

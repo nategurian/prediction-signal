@@ -28,7 +28,7 @@ SELECT cron.schedule(
 
 SELECT cron.schedule(
   'refresh_external_data',
-  '*/15 * * * *',
+  '*/10 * * * *',
   format($sql$
     SELECT net.http_post(
       url := %L,
@@ -43,7 +43,7 @@ SELECT cron.schedule(
 
 SELECT cron.schedule(
   'run_pipeline',
-  '2-59/15 * * * *',
+  '3-59/10 * * * *',
   format($sql$
     SELECT net.http_post(
       url := %L,

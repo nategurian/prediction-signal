@@ -54,6 +54,8 @@ export interface ModelOutput {
   confidence_score: number;
   feature_json: Record<string, unknown>;
   model_version: string;
+  /** Weather snapshot used for this output (when present). */
+  external_data_id: string | null;
 }
 
 export interface Signal {

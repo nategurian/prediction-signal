@@ -27,6 +27,9 @@ export async function POST(req: Request) {
     const forecastTimestamp = normalized.forecast_timestamp as string;
     const previousForecastHigh = normalized.previous_forecast_high as number | null;
     const currentTemp = normalized.current_temp as number | null;
+    const leadTimeHours = normalized.lead_time_hours_to_forecast_local_noon;
+    const climatologyNormalHighF = normalized.climatology_normal_high_f;
+    const forecastAnomalyVsClimatologyF = normalized.forecast_anomaly_vs_climatology_f;
 
     if (forecastedHigh == null || Number.isNaN(Number(forecastedHigh))) {
       return NextResponse.json({ error: "normalized_json.forecasted_high is missing or invalid" }, { status: 400 });
@@ -64,6 +67,17 @@ export async function POST(req: Request) {
           forecast_timestamp: forecastTimestamp,
           previous_forecast_high: previousForecastHigh,
           forecast_revision: previousForecastHigh != null ? forecastedHigh - previousForecastHigh : null,
+          lead_time_hours_to_forecast_local_noon:
+            typeof leadTimeHours === "number" && Number.isFinite(leadTimeHours) ? leadTimeHours : null,
+          climatology_normal_high_f:
+            typeof climatologyNormalHighF === "number" && Number.isFinite(climatologyNormalHighF)
+              ? climatologyNormalHighF
+              : null,
+          forecast_anomaly_vs_climatology_f:
+            typeof forecastAnomalyVsClimatologyF === "number" &&
+            Number.isFinite(forecastAnomalyVsClimatologyF)
+              ? forecastAnomalyVsClimatologyF
+              : null,
           sigma: appConfig.sigma,
           threshold: market.threshold_value,
           bucket_lower: market.bucket_lower,
@@ -82,6 +96,7 @@ export async function POST(req: Request) {
           confidence_score: confidence,
           feature_json: featureJson,
           model_version: appConfig.modelVersion,
+          external_data_id: externalData.id,
         });
 
         modelsCreated++;
