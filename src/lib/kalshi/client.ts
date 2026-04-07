@@ -106,7 +106,8 @@ export class KalshiClient {
     do {
       const resp = await this.getMarkets({
         series_ticker: "KXHIGHNY",
-        status: "active",
+        // Kalshi GET /markets only accepts unopened | open | closed | settled — not "active"
+        status: "open",
         cursor,
         limit: 100,
       });
