@@ -41,12 +41,17 @@ export function kalshiMarketToQuotePrices(km: KalshiMarket): KalshiQuotePrices {
 }
 
 /**
- * Kalshi `GET /markets` list responses often omit top-of-book *_dollars fields.
- * `GET /markets/{ticker}` returns full quotes — use when this returns true.
+ * Kalshi `GET /markets` list responses often omit some top-of-book *_dollars fields
+ * (commonly bids while asks are present). `GET /markets/{ticker}` returns full quotes.
  */
 export function needsFullMarketQuoteFetch(km: KalshiMarket): boolean {
   const q = kalshiMarketToQuotePrices(km);
-  return q.yes_ask == null || q.no_ask == null;
+  return (
+    q.yes_ask == null ||
+    q.no_ask == null ||
+    q.yes_bid == null ||
+    q.no_bid == null
+  );
 }
 
 export function kalshiVolume(km: KalshiMarket): number {

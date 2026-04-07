@@ -62,7 +62,30 @@ describe("kalshiMarketToQuotePrices", () => {
 });
 
 describe("needsFullMarketQuoteFetch", () => {
-  it("is false when both asks parse from *_dollars", () => {
+  it("is false when all four sides parse from *_dollars", () => {
+    const km = {
+      ticker: "T",
+      title: "t",
+      subtitle: "",
+      status: "active",
+      yes_ask_dollars: "0.40",
+      yes_bid_dollars: "0.35",
+      no_ask_dollars: "0.55",
+      no_bid_dollars: "0.50",
+      event_ticker: "E",
+      category: "c",
+      close_time: "",
+      expiration_time: "",
+      settlement_timer_seconds: 0,
+      result: "",
+      can_close_early: true,
+      yes_sub_title: "",
+      no_sub_title: "",
+    } as KalshiMarket;
+    expect(needsFullMarketQuoteFetch(km)).toBe(false);
+  });
+
+  it("is true when list has asks but omits bids (common list payload shape)", () => {
     const km = {
       ticker: "T",
       title: "t",
@@ -80,7 +103,7 @@ describe("needsFullMarketQuoteFetch", () => {
       yes_sub_title: "",
       no_sub_title: "",
     } as KalshiMarket;
-    expect(needsFullMarketQuoteFetch(km)).toBe(false);
+    expect(needsFullMarketQuoteFetch(km)).toBe(true);
   });
 
   it("is true when list payload omits asks", () => {

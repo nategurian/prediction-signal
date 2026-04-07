@@ -4,15 +4,20 @@ import {
   getLatestSnapshot,
   getRecentSignals,
   getLatestModelOutput,
+  getLatestExternalData,
   getTradesForMarket,
   type Signal,
 } from "@/lib/supabase/db";
 import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
+import { computeModeledProbability } from "@/lib/engine/probability";
+import { computeConfidenceScore } from "@/lib/engine/confidence";
+import { appConfig } from "@/lib/config";
 
 export async function GET() {
   try {
     const markets = await getActiveMarkets();
     const signals = await getRecentSignals(200);
+    const externalData = await getLatestExternalData(appConfig.nicheKey, appConfig.cityKey);
 
     // Signals are newest-first; keep first occurrence per market (newest for that market).
     const signalsByMarket = new Map<string, Signal>();
@@ -54,19 +59,57 @@ export async function GET() {
         }
 
         const modelOutput = await getLatestModelOutput(market.id);
+
+        let modeledYesProb: number | null = null;
+        let confidenceScore: number | null = null;
+
+        if (modelOutput) {
+          modeledYesProb = modelOutput.modeled_probability;
+          confidenceScore = modelOutput.confidence_score;
+        } else if (externalData && snapshot) {
+          const normalized = externalData.normalized_json as Record<string, unknown>;
+          const forecastedHigh = normalized.forecasted_high as number;
+          const forecastTimestamp = normalized.forecast_timestamp as string;
+          const previousForecastHigh = normalized.previous_forecast_high as number | null;
+          if (
+            forecastedHigh != null &&
+            !Number.isNaN(Number(forecastedHigh)) &&
+            forecastTimestamp
+          ) {
+            const probResult = computeModeledProbability({
+              forecastHigh: forecastedHigh,
+              marketStructure: market.market_structure,
+              threshold: market.threshold_value,
+              bucketLower: market.bucket_lower,
+              bucketUpper: market.bucket_upper,
+              sigma: appConfig.sigma,
+            });
+            confidenceScore = computeConfidenceScore({
+              forecastTimestamp,
+              forecastHigh: forecastedHigh,
+              threshold: market.threshold_value,
+              previousForecastHigh,
+              yesBid: snapshot.yes_bid,
+              yesAsk: snapshot.yes_ask,
+              sigma: appConfig.sigma,
+            });
+            modeledYesProb = probResult.modeledYesProbability;
+          }
+        }
+
         if (
           snapshot &&
           snapshot.yes_ask != null &&
           snapshot.no_ask != null &&
-          modelOutput
+          modeledYesProb != null &&
+          confidenceScore != null
         ) {
-          const modeledYesProb = modelOutput.modeled_probability;
           const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask);
           const existingTrades = await getTradesForMarket(market.id);
           const action = selectAction({
             tradeEdgeYes: edges.tradeEdgeYes,
             tradeEdgeNo: edges.tradeEdgeNo,
-            confidenceScore: modelOutput.confidence_score,
+            confidenceScore,
             yesAsk: snapshot.yes_ask,
             yesBid: snapshot.yes_bid ?? 0,
             noAsk: snapshot.no_ask,
@@ -94,7 +137,7 @@ export async function GET() {
             modeled_no_probability: 1 - modeledYesProb,
             trade_edge_yes: edges.tradeEdgeYes,
             trade_edge_no: edges.tradeEdgeNo,
-            confidence: modelOutput.confidence_score,
+            confidence: confidenceScore,
             signal_type: action,
             worth_trading: worthTrading,
             explanation: null,

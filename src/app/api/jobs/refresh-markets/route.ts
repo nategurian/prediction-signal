@@ -4,7 +4,7 @@ import { KalshiClient } from "@/lib/kalshi/client";
 import type { KalshiMarket } from "@/lib/kalshi/types";
 import { kalshiMarketToQuotePrices, kalshiVolume, needsFullMarketQuoteFetch } from "@/lib/kalshi/quotes";
 import { deriveMarketMetadataFromKalshi } from "@/lib/kalshi/marketMetadata";
-import { upsertMarket, insertMarketSnapshot } from "@/lib/supabase/db";
+import { getActiveMarkets, upsertMarket, insertMarketSnapshot } from "@/lib/supabase/db";
 
 /** Kalshi returns tradable markets as `active` (and sometimes `open`). */
 function isKalshiMarketOpen(status: string | undefined): boolean {
@@ -25,6 +25,43 @@ function parseDateFromTicker(ticker: string): string | null {
   return `${year}-${month}-${day}`;
 }
 
+async function upsertMarketAndSnapshotFromDetail(detail: KalshiMarket): Promise<void> {
+  const derived = deriveMarketMetadataFromKalshi(detail);
+  const marketDate = parseDateFromTicker(detail.ticker);
+
+  const market = await upsertMarket({
+    ticker: detail.ticker,
+    title: detail.title,
+    category: detail.category ?? "weather",
+    niche_key: "weather_daily_temp",
+    city_key: "nyc",
+    market_structure: derived.market_structure,
+    market_date: marketDate,
+    threshold_value: derived.threshold_value,
+    bucket_lower: derived.bucket_lower,
+    bucket_upper: derived.bucket_upper,
+    close_time: detail.close_time,
+    settlement_time: detail.expiration_time,
+    status: isKalshiMarketOpen(detail.status) ? "active" : "closed",
+    raw_json: detail as unknown as Record<string, unknown>,
+  });
+
+  const q = kalshiMarketToQuotePrices(detail);
+
+  await insertMarketSnapshot({
+    market_id: market.id,
+    captured_at: new Date().toISOString(),
+    yes_bid: q.yes_bid,
+    yes_ask: q.yes_ask,
+    no_bid: q.no_bid,
+    no_ask: q.no_ask,
+    last_price: q.last_price,
+    implied_probability: q.yes_ask,
+    volume: kalshiVolume(detail),
+    raw_json: detail as unknown as Record<string, unknown>,
+  });
+}
+
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
   if (authError) return authError;
@@ -43,41 +80,24 @@ export async function POST(req: Request) {
         if (full) detail = full;
       }
 
-      const derived = deriveMarketMetadataFromKalshi(detail);
-      const marketDate = parseDateFromTicker(detail.ticker);
-
-      const market = await upsertMarket({
-        ticker: detail.ticker,
-        title: detail.title,
-        category: detail.category ?? "weather",
-        niche_key: "weather_daily_temp",
-        city_key: "nyc",
-        market_structure: derived.market_structure,
-        market_date: marketDate,
-        threshold_value: derived.threshold_value,
-        bucket_lower: derived.bucket_lower,
-        bucket_upper: derived.bucket_upper,
-        close_time: detail.close_time,
-        settlement_time: detail.expiration_time,
-        status: isKalshiMarketOpen(detail.status) ? "active" : "closed",
-        raw_json: detail as unknown as Record<string, unknown>,
-      });
+      await upsertMarketAndSnapshotFromDetail(detail);
       upserted++;
+      snapshots++;
+    }
 
-      const q = kalshiMarketToQuotePrices(detail);
-
-      await insertMarketSnapshot({
-        market_id: market.id,
-        captured_at: new Date().toISOString(),
-        yes_bid: q.yes_bid,
-        yes_ask: q.yes_ask,
-        no_bid: q.no_bid,
-        no_ask: q.no_ask,
-        last_price: q.last_price,
-        implied_probability: q.yes_ask,
-        volume: kalshiVolume(detail),
-        raw_json: detail as unknown as Record<string, unknown>,
-      });
+    /** Kalshi list uses `open` only; contracts we still track as active may already be closed — refresh via ticker detail. */
+    const openTickers = new Set(markets.map((m) => m.ticker));
+    const dbActive = await getActiveMarkets();
+    for (const row of dbActive) {
+      if (openTickers.has(row.ticker)) continue;
+      let detail = await client.getMarket(row.ticker);
+      if (!detail) continue;
+      if (needsFullMarketQuoteFetch(detail)) {
+        const full = await client.getMarket(detail.ticker);
+        if (full) detail = full;
+      }
+      await upsertMarketAndSnapshotFromDetail(detail);
+      upserted++;
       snapshots++;
     }
 
