@@ -71,29 +71,38 @@ export async function GET() {
           const forecastedHigh = normalized.forecasted_high as number;
           const forecastTimestamp = normalized.forecast_timestamp as string;
           const previousForecastHigh = normalized.previous_forecast_high as number | null;
+          const canModel =
+            market.market_structure === "binary_threshold"
+              ? market.threshold_value != null
+              : market.bucket_lower != null && market.bucket_upper != null;
           if (
+            canModel &&
             forecastedHigh != null &&
             !Number.isNaN(Number(forecastedHigh)) &&
             forecastTimestamp
           ) {
-            const probResult = computeModeledProbability({
-              forecastHigh: forecastedHigh,
-              marketStructure: market.market_structure,
-              threshold: market.threshold_value,
-              bucketLower: market.bucket_lower,
-              bucketUpper: market.bucket_upper,
-              sigma: appConfig.sigma,
-            });
-            confidenceScore = computeConfidenceScore({
-              forecastTimestamp,
-              forecastHigh: forecastedHigh,
-              threshold: market.threshold_value,
-              previousForecastHigh,
-              yesBid: snapshot.yes_bid,
-              yesAsk: snapshot.yes_ask,
-              sigma: appConfig.sigma,
-            });
-            modeledYesProb = probResult.modeledYesProbability;
+            try {
+              const probResult = computeModeledProbability({
+                forecastHigh: forecastedHigh,
+                marketStructure: market.market_structure,
+                threshold: market.threshold_value,
+                bucketLower: market.bucket_lower,
+                bucketUpper: market.bucket_upper,
+                sigma: appConfig.sigma,
+              });
+              confidenceScore = computeConfidenceScore({
+                forecastTimestamp,
+                forecastHigh: forecastedHigh,
+                threshold: market.threshold_value,
+                previousForecastHigh,
+                yesBid: snapshot.yes_bid,
+                yesAsk: snapshot.yes_ask,
+                sigma: appConfig.sigma,
+              });
+              modeledYesProb = probResult.modeledYesProbability;
+            } catch (err) {
+              console.error(`GET /api/opportunities live model skip ${market.ticker}:`, err);
+            }
           }
         }
 
