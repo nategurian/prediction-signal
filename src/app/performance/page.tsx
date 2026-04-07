@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   LineChart,
   Line,
@@ -27,6 +27,14 @@ interface PerformanceData {
   };
 }
 
+function isPerformancePayload(
+  x: unknown
+): x is PerformanceData {
+  if (typeof x !== "object" || x === null) return false;
+  const o = x as Record<string, unknown>;
+  return typeof o.totalPnl === "number" && typeof o.tradeCount === "number";
+}
+
 function StatCard({
   label,
   value,
@@ -50,19 +58,41 @@ export default function PerformancePage() {
   const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/performance", { cache: "no-store" });
-        setData(await res.json());
-      } catch (err) {
-        console.error("Failed to load performance:", err);
-      } finally {
-        setLoading(false);
+  const load = useCallback(async (isInitial: boolean) => {
+    try {
+      if (isInitial) setLoading(true);
+      const res = await fetch(`/api/performance?_=${Date.now()}`, {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      });
+      const json: unknown = await res.json();
+      if (!res.ok || !isPerformancePayload(json)) {
+        if (!res.ok) console.error("GET /api/performance failed:", res.status);
+        return;
       }
+      setData(json);
+    } catch (err) {
+      console.error("Failed to load performance:", err);
+    } finally {
+      if (isInitial) setLoading(false);
     }
-    load();
   }, []);
+
+  useEffect(() => {
+    load(true);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load(false);
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) load(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [load]);
 
   if (loading) {
     return (
