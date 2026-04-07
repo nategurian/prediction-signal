@@ -53,7 +53,7 @@ export default function PerformancePage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/performance");
+        const res = await fetch("/api/performance", { cache: "no-store" });
         setData(await res.json());
       } catch (err) {
         console.error("Failed to load performance:", err);

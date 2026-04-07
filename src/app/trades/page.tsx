@@ -45,7 +45,7 @@ export default function TradesPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/trades");
+        const res = await fetch("/api/trades", { cache: "no-store" });
         const data = await res.json();
         setTrades(data.trades ?? []);
       } catch (err) {

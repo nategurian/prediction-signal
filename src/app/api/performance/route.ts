@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAllTrades, getDefaultAccount } from "@/lib/supabase/db";
 
+export const dynamic = "force-dynamic";
+
+const NO_STORE = { "Cache-Control": "private, no-store, must-revalidate" } as const;
+
 export async function GET() {
   try {
     const trades = await getAllTrades(1000);
@@ -43,23 +47,29 @@ export async function GET() {
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     }
 
-    return NextResponse.json({
-      totalPnl: Math.round(totalPnl * 100) / 100,
-      realizedPnl: Math.round(realizedPnl * 100) / 100,
-      unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
-      tradeCount: trades.length,
-      winRate: settledTrades.length > 0 ? Math.round((wins.length / settledTrades.length) * 100) : 0,
-      avgWin: Math.round(avgWin * 100) / 100,
-      avgLoss: Math.round(avgLoss * 100) / 100,
-      maxDrawdown: Math.round(maxDrawdown * 100) / 100,
-      equityCurve,
-      account: {
-        startingBalance: account.starting_balance,
-        currentBalance: account.current_balance,
+    return NextResponse.json(
+      {
+        totalPnl: Math.round(totalPnl * 100) / 100,
+        realizedPnl: Math.round(realizedPnl * 100) / 100,
+        unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
+        tradeCount: trades.length,
+        winRate: settledTrades.length > 0 ? Math.round((wins.length / settledTrades.length) * 100) : 0,
+        avgWin: Math.round(avgWin * 100) / 100,
+        avgLoss: Math.round(avgLoss * 100) / 100,
+        maxDrawdown: Math.round(maxDrawdown * 100) / 100,
+        equityCurve,
+        account: {
+          startingBalance: account.starting_balance,
+          currentBalance: account.current_balance,
+        },
       },
-    });
+      { headers: NO_STORE }
+    );
   } catch (err) {
     console.error("GET /api/performance error:", err);
-    return NextResponse.json({ error: "Failed to fetch performance" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch performance" },
+      { status: 500, headers: NO_STORE }
+    );
   }
 }
