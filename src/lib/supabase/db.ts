@@ -291,6 +291,36 @@ export async function getAllTrades(limit = 100): Promise<SimulatedTrade[]> {
   return (data ?? []) as SimulatedTrade[];
 }
 
+/** Trade row with joined market schedule fields for dashboards. */
+export type SimulatedTradeWithMarket = SimulatedTrade & {
+  markets: Pick<
+    Market,
+    "ticker" | "title" | "market_date" | "close_time" | "settlement_time" | "raw_json"
+  > | null;
+};
+
+export async function getAllTradesWithMarkets(limit = 100): Promise<SimulatedTradeWithMarket[]> {
+  const { data, error } = await db()
+    .from("simulated_trades")
+    .select(
+      `
+      *,
+      markets (
+        ticker,
+        title,
+        market_date,
+        close_time,
+        settlement_time,
+        raw_json
+      )
+    `
+    )
+    .order("entry_time", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as SimulatedTradeWithMarket[];
+}
+
 export async function getTradeById(id: string): Promise<SimulatedTrade | null> {
   const { data, error } = await db()
     .from("simulated_trades")

@@ -2,7 +2,7 @@
 -- Requires pg_cron and pg_net extensions (enabled by default on Supabase)
 --
 -- These jobs call the Next.js API route handlers via HTTP POST.
--- Replace YOUR_APP_URL and YOUR_ETL_CRON_SECRET before deploying.
+-- Replace YOUR_APP_URL and f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ before deploying.
 
 -- Clear any existing jobs from this migration
 SELECT cron.unschedule(jobid)
@@ -24,7 +24,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -40,7 +40,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -56,7 +56,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -72,7 +72,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -88,7 +88,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );

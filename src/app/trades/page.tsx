@@ -16,6 +16,14 @@ interface Trade {
   status: string;
   unrealized_pnl: number;
   realized_pnl: number | null;
+  market: {
+    ticker: string;
+    title: string;
+    market_date: string | null;
+    open_time: string | null;
+    close_time: string | null;
+    settlement_time: string | null;
+  } | null;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -35,6 +43,11 @@ function PnlDisplay({ value }: { value: number | null }) {
   if (value == null) return <span className="text-zinc-600">—</span>;
   const color = value > 0 ? "text-emerald-400" : value < 0 ? "text-red-400" : "text-zinc-500";
   return <span className={`font-mono ${color}`}>${value.toFixed(2)}</span>;
+}
+
+function fmtSchedule(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
 }
 
 export default function TradesPage() {
@@ -96,6 +109,19 @@ export default function TradesPage() {
             <thead>
               <tr className="border-b border-zinc-800 text-zinc-500 text-left">
                 <th className="pb-3 pr-4 font-medium">Entry Time</th>
+                <th className="pb-3 pr-4 font-medium text-xs">Obs. date</th>
+                <th className="pb-3 pr-4 font-medium text-xs max-w-[7.5rem]" title="From Kalshi (contract open)">
+                  Trading opens
+                </th>
+                <th className="pb-3 pr-4 font-medium text-xs max-w-[7.5rem]" title="Last time to trade this contract">
+                  Trading closes
+                </th>
+                <th
+                  className="pb-3 pr-4 font-medium text-xs max-w-[8rem]"
+                  title="Kalshi scheduled expiration / latest resolution window"
+                >
+                  Settles (sched.)
+                </th>
                 <th className="pb-3 pr-4 font-medium">Side</th>
                 <th className="pb-3 pr-4 font-medium text-right">Qty</th>
                 <th className="pb-3 pr-4 font-medium text-right">Entry</th>
@@ -109,9 +135,26 @@ export default function TradesPage() {
               {filtered.map((trade) => (
                 <tr key={trade.id} className="border-b border-zinc-900 hover:bg-zinc-900/50">
                   <td className="py-3 pr-4 text-xs text-zinc-400">
-                    <Link href={`/trades/${trade.id}`} className="hover:text-white transition-colors">
+                    <Link href={`/trades/${trade.id}`} className="hover:text-white transition-colors block">
                       {new Date(trade.entry_time).toLocaleString()}
+                      {trade.market?.ticker && (
+                        <span className="block text-zinc-600 font-mono mt-0.5 truncate max-w-[10rem]">
+                          {trade.market.ticker}
+                        </span>
+                      )}
                     </Link>
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-zinc-400 font-mono whitespace-nowrap">
+                    {trade.market?.market_date ?? "—"}
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-zinc-500 max-w-[7.5rem] whitespace-nowrap">
+                    {fmtSchedule(trade.market?.open_time ?? null)}
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-zinc-500 max-w-[7.5rem] whitespace-nowrap">
+                    {fmtSchedule(trade.market?.close_time ?? null)}
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-zinc-500 max-w-[8rem] whitespace-nowrap">
+                    {fmtSchedule(trade.market?.settlement_time ?? null)}
                   </td>
                   <td className="py-3 pr-4">
                     <span className={trade.side === "YES" ? "text-emerald-400" : "text-red-400"}>

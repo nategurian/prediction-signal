@@ -1,5 +1,5 @@
 -- Point pg_cron HTTP jobs at production Vercel (applied via Supabase MCP / dashboard).
--- Replace YOUR_ETL_CRON_SECRET before running in a new environment.
+-- Replace f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ before running in a new environment.
 
 SELECT cron.unschedule(jobid)
 FROM cron.job
@@ -19,7 +19,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -34,7 +34,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -49,7 +49,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -64,7 +64,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
@@ -79,7 +79,7 @@ SELECT cron.schedule(
       url := %L,
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_ETL_CRON_SECRET'
+        'Authorization', 'Bearer f7K2mXqP9vRnT4wL8dYsC1bHjZeA3uNg6oE5iPcQ0yVtMkFwBxRsDlJ'
       ),
       body := '{}'::jsonb
     );
