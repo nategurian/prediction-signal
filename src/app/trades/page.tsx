@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 
 interface Trade {
@@ -48,6 +49,108 @@ function PnlDisplay({ value }: { value: number | null }) {
 function fmtSchedule(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleString();
+}
+
+function MarketScheduleTooltip({ market }: { market: NonNullable<Trade["market"]> }) {
+  const tipId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const positionFromTrigger = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCoords({ x: r.left + r.width / 2, y: r.top });
+  };
+
+  const show = () => {
+    if (leaveTimer.current) {
+      clearTimeout(leaveTimer.current);
+      leaveTimer.current = null;
+    }
+    positionFromTrigger();
+    setOpen(true);
+  };
+
+  const hideSoon = () => {
+    leaveTimer.current = setTimeout(() => {
+      setOpen(false);
+      setCoords(null);
+    }, 120);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onScrollOrResize = () => positionFromTrigger();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [open]);
+
+  useEffect(
+    () => () => {
+      if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    },
+    []
+  );
+
+  const tooltip =
+    open &&
+    coords &&
+    typeof document !== "undefined" &&
+    createPortal(
+      <div
+        id={tipId}
+        role="tooltip"
+        className="fixed z-[200] w-[17.5rem] max-w-[calc(100vw-1.5rem)] rounded-lg border border-zinc-600 bg-zinc-900/95 px-3 py-2.5 text-left text-xs shadow-xl shadow-black/40 backdrop-blur-sm pointer-events-none"
+        style={{
+          left: coords.x,
+          top: coords.y,
+          transform: "translate(-50%, calc(-100% - 10px))",
+        }}
+      >
+        <p className="text-zinc-200 font-medium leading-snug mb-2 line-clamp-3" title={market.title}>
+          {market.title}
+        </p>
+        <dl className="grid grid-cols-[7.5rem_1fr] gap-x-2 gap-y-1.5 text-zinc-500">
+          <dt className="text-zinc-600">Obs. date</dt>
+          <dd className="font-mono text-zinc-400">{market.market_date ?? "—"}</dd>
+          <dt className="text-zinc-600">Trading opens</dt>
+          <dd className="text-zinc-400 tabular-nums">{fmtSchedule(market.open_time)}</dd>
+          <dt className="text-zinc-600">Trading closes</dt>
+          <dd className="text-zinc-400 tabular-nums">{fmtSchedule(market.close_time)}</dd>
+          <dt className="text-zinc-600">Settles (sched.)</dt>
+          <dd className="text-zinc-400 tabular-nums leading-tight">{fmtSchedule(market.settlement_time)}</dd>
+        </dl>
+        <p className="mt-2 pt-2 border-t border-zinc-800 text-[10px] text-zinc-600">
+          Kalshi schedule · times in your locale
+        </p>
+      </div>,
+      document.body
+    );
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="font-mono text-left text-zinc-300 border-b border-dotted border-zinc-500/50 hover:text-white hover:border-zinc-400 cursor-help bg-transparent p-0 max-w-[11rem] truncate"
+        onMouseEnter={show}
+        onMouseLeave={hideSoon}
+        onFocus={show}
+        onBlur={hideSoon}
+        aria-describedby={open ? tipId : undefined}
+      >
+        {market.ticker}
+      </button>
+      {tooltip}
+    </>
+  );
 }
 
 export default function TradesPage() {
@@ -108,19 +211,9 @@ export default function TradesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-zinc-500 text-left">
-                <th className="pb-3 pr-4 font-medium">Entry Time</th>
-                <th className="pb-3 pr-4 font-medium text-xs">Obs. date</th>
-                <th className="pb-3 pr-4 font-medium text-xs max-w-[7.5rem]" title="From Kalshi (contract open)">
-                  Trading opens
-                </th>
-                <th className="pb-3 pr-4 font-medium text-xs max-w-[7.5rem]" title="Last time to trade this contract">
-                  Trading closes
-                </th>
-                <th
-                  className="pb-3 pr-4 font-medium text-xs max-w-[8rem]"
-                  title="Kalshi scheduled expiration / latest resolution window"
-                >
-                  Settles (sched.)
+                <th className="pb-3 pr-4 font-medium">Entry</th>
+                <th className="pb-3 pr-4 font-medium w-[8.5rem]">
+                  <span title="Hover ticker for Kalshi trading window and settlement schedule">Contract</span>
                 </th>
                 <th className="pb-3 pr-4 font-medium">Side</th>
                 <th className="pb-3 pr-4 font-medium text-right">Qty</th>
@@ -134,27 +227,17 @@ export default function TradesPage() {
             <tbody>
               {filtered.map((trade) => (
                 <tr key={trade.id} className="border-b border-zinc-900 hover:bg-zinc-900/50">
-                  <td className="py-3 pr-4 text-xs text-zinc-400">
-                    <Link href={`/trades/${trade.id}`} className="hover:text-white transition-colors block">
+                  <td className="py-3 pr-4 text-xs text-zinc-400 whitespace-nowrap align-top">
+                    <Link href={`/trades/${trade.id}`} className="hover:text-white transition-colors">
                       {new Date(trade.entry_time).toLocaleString()}
-                      {trade.market?.ticker && (
-                        <span className="block text-zinc-600 font-mono mt-0.5 truncate max-w-[10rem]">
-                          {trade.market.ticker}
-                        </span>
-                      )}
                     </Link>
                   </td>
-                  <td className="py-3 pr-4 text-xs text-zinc-400 font-mono whitespace-nowrap">
-                    {trade.market?.market_date ?? "—"}
-                  </td>
-                  <td className="py-3 pr-4 text-xs text-zinc-500 max-w-[7.5rem] whitespace-nowrap">
-                    {fmtSchedule(trade.market?.open_time ?? null)}
-                  </td>
-                  <td className="py-3 pr-4 text-xs text-zinc-500 max-w-[7.5rem] whitespace-nowrap">
-                    {fmtSchedule(trade.market?.close_time ?? null)}
-                  </td>
-                  <td className="py-3 pr-4 text-xs text-zinc-500 max-w-[8rem] whitespace-nowrap">
-                    {fmtSchedule(trade.market?.settlement_time ?? null)}
+                  <td className="py-3 pr-4 align-top">
+                    {trade.market ? (
+                      <MarketScheduleTooltip market={trade.market} />
+                    ) : (
+                      <span className="text-zinc-600 text-xs">—</span>
+                    )}
                   </td>
                   <td className="py-3 pr-4">
                     <span className={trade.side === "YES" ? "text-emerald-400" : "text-red-400"}>
