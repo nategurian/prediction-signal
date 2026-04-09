@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 
@@ -56,14 +56,27 @@ function MarketScheduleTooltip({ market }: { market: NonNullable<Trade["market"]
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ x: number; y: number } | null>(null);
+  const [tapMode, setTapMode] = useState(false);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const positionFromTrigger = () => {
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none)");
+    const apply = () => setTapMode(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  const positionFromTrigger = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setCoords({ x: r.left + r.width / 2, y: r.top });
-  };
+    if (tapMode) {
+      setCoords({ x: r.left + r.width / 2, y: r.bottom });
+    } else {
+      setCoords({ x: r.left + r.width / 2, y: r.top });
+    }
+  }, [tapMode]);
 
   const show = () => {
     if (leaveTimer.current) {
@@ -90,7 +103,21 @@ function MarketScheduleTooltip({ market }: { market: NonNullable<Trade["market"]
       window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
-  }, [open]);
+  }, [open, positionFromTrigger]);
+
+  useEffect(() => {
+    if (!open || !tapMode) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (triggerRef.current?.contains(t)) return;
+      const tip = document.getElementById(tipId);
+      if (tip?.contains(t)) return;
+      setOpen(false);
+      setCoords(null);
+    };
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, [open, tapMode, tipId]);
 
   useEffect(
     () => () => {
@@ -98,6 +125,10 @@ function MarketScheduleTooltip({ market }: { market: NonNullable<Trade["market"]
     },
     []
   );
+
+  const tooltipTransform = tapMode
+    ? "translate(-50%, 8px)"
+    : "translate(-50%, calc(-100% - 10px))";
 
   const tooltip =
     open &&
@@ -107,11 +138,13 @@ function MarketScheduleTooltip({ market }: { market: NonNullable<Trade["market"]
       <div
         id={tipId}
         role="tooltip"
-        className="fixed z-[200] w-[17.5rem] max-w-[calc(100vw-1.5rem)] rounded-lg border border-zinc-600 bg-zinc-900/95 px-3 py-2.5 text-left text-xs shadow-xl shadow-black/40 backdrop-blur-sm pointer-events-none"
+        className={`fixed z-[200] w-[17.5rem] max-w-[calc(100vw-1.5rem)] rounded-lg border border-zinc-600 bg-zinc-900/95 px-3 py-2.5 text-left text-xs shadow-xl shadow-black/40 backdrop-blur-sm ${
+          tapMode ? "pointer-events-auto" : "pointer-events-none"
+        }`}
         style={{
           left: coords.x,
           top: coords.y,
-          transform: "translate(-50%, calc(-100% - 10px))",
+          transform: tooltipTransform,
         }}
       >
         <p className="text-zinc-200 font-medium leading-snug mb-2 line-clamp-3" title={market.title}>
@@ -139,12 +172,27 @@ function MarketScheduleTooltip({ market }: { market: NonNullable<Trade["market"]
       <button
         ref={triggerRef}
         type="button"
-        className="font-mono text-left text-zinc-300 border-b border-dotted border-zinc-500/50 hover:text-white hover:border-zinc-400 cursor-help bg-transparent p-0 max-w-[11rem] truncate"
-        onMouseEnter={show}
-        onMouseLeave={hideSoon}
-        onFocus={show}
-        onBlur={hideSoon}
+        className="font-mono text-left text-zinc-300 border-b border-dotted border-zinc-500/50 hover:text-white hover:border-zinc-400 cursor-help bg-transparent p-0 max-w-[min(11rem,55vw)] sm:max-w-[11rem] truncate"
+        onMouseEnter={tapMode ? undefined : show}
+        onMouseLeave={tapMode ? undefined : hideSoon}
+        onFocus={tapMode ? undefined : show}
+        onBlur={tapMode ? undefined : hideSoon}
+        onClick={
+          tapMode
+            ? (e) => {
+                e.stopPropagation();
+                if (open) {
+                  setOpen(false);
+                  setCoords(null);
+                } else {
+                  positionFromTrigger();
+                  setOpen(true);
+                }
+              }
+            : undefined
+        }
         aria-describedby={open ? tipId : undefined}
+        aria-expanded={tapMode ? open : undefined}
       >
         {market.ticker}
       </button>
@@ -185,9 +233,9 @@ export default function TradesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Trades</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
+        <h1 className="text-xl font-bold sm:text-2xl">Trades</h1>
+        <div className="flex flex-wrap gap-2">
           {(["all", "open", "settled"] as const).map((f) => (
             <button
               key={f}
@@ -207,8 +255,8 @@ export default function TradesPage() {
       {filtered.length === 0 ? (
         <div className="text-zinc-500 text-center py-12">No trades found.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 touch-pan-x">
+          <table className="w-full min-w-[52rem] text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-zinc-500 text-left">
                 <th className="pb-3 pr-4 font-medium">Entry</th>

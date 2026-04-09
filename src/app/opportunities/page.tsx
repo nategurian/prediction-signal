@@ -76,14 +76,14 @@ export default function OpportunitiesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Opportunities</h1>
+      <h1 className="text-xl font-bold sm:text-2xl mb-4 sm:mb-6">Opportunities</h1>
       {opportunities.length === 0 ? (
         <div className="text-zinc-500 text-center py-12">
           No active markets. Run the pipeline to fetch data.
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 touch-pan-x">
+          <table className="w-full min-w-[56rem] text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-zinc-500 text-left">
                 <th className="pb-3 pr-4 font-medium">Market</th>
@@ -119,7 +119,7 @@ export default function OpportunitiesPage() {
                   <td className="py-3 pr-4">
                     <SignalBadge type={opp.signal_type} />
                   </td>
-                  <td className="py-3 text-xs text-zinc-500 max-w-xs truncate">
+                  <td className="py-3 text-[11px] sm:text-xs text-zinc-500 max-w-[12rem] sm:max-w-xs truncate" title={opp.explanation ?? undefined}>
                     {opp.explanation ?? "—"}
                   </td>
                 </tr>

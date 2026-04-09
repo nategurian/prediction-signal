@@ -47,7 +47,7 @@ function StatCard({
   return (
     <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4">
       <div className="text-xs text-zinc-500 mb-1">{label}</div>
-      <div className={`text-xl font-mono font-bold ${color ?? "text-white"}`}>
+      <div className={`text-lg sm:text-xl font-mono font-bold ${color ?? "text-white"}`}>
         {value}
       </div>
     </div>
@@ -57,6 +57,7 @@ function StatCard({
 export default function PerformancePage() {
   const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chartHeight, setChartHeight] = useState(300);
 
   const load = useCallback(async (isInitial: boolean) => {
     try {
@@ -94,6 +95,14 @@ export default function PerformancePage() {
     };
   }, [load]);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    const apply = () => setChartHeight(mq.matches ? 220 : 300);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -119,9 +128,9 @@ export default function PerformancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Performance</h1>
+      <h1 className="text-xl font-bold sm:text-2xl mb-4 sm:mb-6">Performance</h1>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         <StatCard label="Total P&L" value={`$${data.totalPnl.toFixed(2)}`} color={pnlColor} />
         <StatCard
           label="Realized P&L"
@@ -140,23 +149,27 @@ export default function PerformancePage() {
         <StatCard label="Max Drawdown" value={`$${data.maxDrawdown.toFixed(2)}`} color="text-red-400" />
       </div>
 
-      <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-6">
+      <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 sm:p-6 overflow-x-auto">
         <h2 className="text-sm font-medium text-zinc-400 mb-4">Equity Curve</h2>
         {data.equityCurve.length === 0 ? (
           <div className="text-zinc-600 text-center py-8">
             No settled trades yet.
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={data.equityCurve}>
+          <div className="min-w-0 w-full" style={{ height: chartHeight }}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
+            <LineChart data={data.equityCurve} margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "#71717a", fontSize: 11 }}
-                tickFormatter={(v) => new Date(v).toLocaleDateString()}
+                tick={{ fill: "#71717a", fontSize: 10 }}
+                tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                interval="preserveStartEnd"
+                minTickGap={24}
               />
               <YAxis
-                tick={{ fill: "#71717a", fontSize: 11 }}
+                width={44}
+                tick={{ fill: "#71717a", fontSize: 10 }}
                 tickFormatter={(v) => `$${v}`}
               />
               <Tooltip
@@ -178,17 +191,18 @@ export default function PerformancePage() {
               />
             </LineChart>
           </ResponsiveContainer>
+          </div>
         )}
       </div>
 
       <div className="mt-6 bg-zinc-900 rounded-lg border border-zinc-800 p-4">
-        <div className="flex justify-between text-sm">
+        <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-baseline text-sm">
           <span className="text-zinc-500">Account Balance</span>
-          <span className="font-mono">${data.account.currentBalance.toFixed(2)}</span>
+          <span className="font-mono tabular-nums break-all text-right">${data.account.currentBalance.toFixed(2)}</span>
         </div>
-        <div className="flex justify-between text-sm mt-1">
+        <div className="flex flex-col gap-1 sm:flex-row sm:justify-between sm:items-baseline text-sm mt-3 sm:mt-1">
           <span className="text-zinc-500">Starting Balance</span>
-          <span className="font-mono text-zinc-500">${data.account.startingBalance.toFixed(2)}</span>
+          <span className="font-mono tabular-nums break-all text-right text-zinc-500">${data.account.startingBalance.toFixed(2)}</span>
         </div>
       </div>
     </div>

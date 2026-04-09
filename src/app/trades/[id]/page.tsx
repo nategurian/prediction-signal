@@ -33,9 +33,9 @@ interface TradeDetail {
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between py-2 border-b border-zinc-800">
-      <span className="text-zinc-500 text-sm">{label}</span>
-      <span className="text-sm font-mono">{value}</span>
+    <div className="flex flex-col gap-0.5 py-2 border-b border-zinc-800 sm:flex-row sm:justify-between sm:items-baseline sm:gap-4">
+      <span className="text-zinc-500 text-sm shrink-0">{label}</span>
+      <span className="text-sm font-mono text-left sm:text-right break-all min-w-0 sm:max-w-[70%]">{value}</span>
     </div>
   );
 }
@@ -85,9 +85,9 @@ export default function TradeDetailPage() {
         ← Back to Trades
       </Link>
 
-      <h1 className="text-2xl font-bold mb-6">Trade Detail</h1>
+      <h1 className="text-xl font-bold sm:text-2xl mb-4 sm:mb-6">Trade Detail</h1>
 
-      <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-6 mb-6">
+      <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 sm:p-6 mb-4 sm:mb-6">
         <h2 className="text-sm font-medium text-zinc-400 mb-4">Trade Info</h2>
         <InfoRow label="Side" value={<span className={trade.side === "YES" ? "text-emerald-400" : "text-red-400"}>{trade.side}</span>} />
         <InfoRow label="Quantity" value={trade.quantity} />
@@ -107,7 +107,7 @@ export default function TradeDetailPage() {
       </div>
 
       {settlement && (
-        <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-6 mb-6">
+        <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-sm font-medium text-zinc-400 mb-4">Settlement</h2>
           <InfoRow label="Outcome" value={settlement.outcome} />
           <InfoRow label="Settlement Value" value={settlement.settlement_value} />
@@ -116,7 +116,7 @@ export default function TradeDetailPage() {
       )}
 
       {postmortem && (
-        <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-6">
+        <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4 sm:p-6">
           <h2 className="text-sm font-medium text-zinc-400 mb-4">Postmortem</h2>
           <div className="mb-3">
             <span className={`text-xs px-2 py-0.5 rounded border ${
