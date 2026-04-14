@@ -82,7 +82,7 @@ export default function OpportunitiesPage() {
           No active markets. Run the pipeline to fetch data.
         </div>
       ) : (
-        <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 touch-pan-x">
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 touch-manipulation">
           <table className="w-full min-w-[56rem] text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-zinc-500 text-left">
