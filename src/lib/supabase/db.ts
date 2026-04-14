@@ -148,6 +148,12 @@ export async function getMarketByTicker(ticker: string): Promise<Market | null> 
   return (data as Market) ?? null;
 }
 
+export async function getMarketById(id: string): Promise<Market | null> {
+  const { data, error } = await db().from("markets").select("*").eq("id", id).single();
+  if (error && error.code !== "PGRST116") throw error;
+  return (data as Market) ?? null;
+}
+
 export async function upsertMarket(market: Partial<Market> & { ticker: string }): Promise<Market> {
   const { data, error } = await db()
     .from("markets")
@@ -303,6 +309,17 @@ export async function getOpenTrades(): Promise<SimulatedTrade[]> {
   return (data ?? []) as SimulatedTrade[];
 }
 
+export async function getSettledTrades(limit = 500): Promise<SimulatedTrade[]> {
+  const { data, error } = await db()
+    .from("simulated_trades")
+    .select("*")
+    .eq("status", "settled")
+    .order("entry_time", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as SimulatedTrade[];
+}
+
 export async function getAllTrades(limit = 100): Promise<SimulatedTrade[]> {
   const { data, error } = await db()
     .from("simulated_trades")
@@ -417,6 +434,20 @@ export async function getPostmortemByTrade(tradeId: string): Promise<TradePostmo
     .from("trade_postmortems")
     .select("*")
     .eq("simulated_trade_id", tradeId)
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  return (data as TradePostmortem) ?? null;
+}
+
+export async function updatePostmortemByTradeId(
+  tradeId: string,
+  updates: Pick<TradePostmortem, "summary" | "reason_codes_json" | "structured_json" | "outcome_label">
+): Promise<TradePostmortem | null> {
+  const { data, error } = await db()
+    .from("trade_postmortems")
+    .update(updates)
+    .eq("simulated_trade_id", tradeId)
+    .select()
     .single();
   if (error && error.code !== "PGRST116") throw error;
   return (data as TradePostmortem) ?? null;

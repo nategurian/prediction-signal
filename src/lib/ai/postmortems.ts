@@ -1,6 +1,12 @@
 import OpenAI from "openai";
 import { POSTMORTEM_PROMPT } from "./prompts";
-import { insertPostmortem, type SimulatedTrade, type Settlement } from "@/lib/supabase/db";
+import {
+  getPostmortemByTrade,
+  insertPostmortem,
+  updatePostmortemByTradeId,
+  type SimulatedTrade,
+  type Settlement,
+} from "@/lib/supabase/db";
 
 interface PostmortemResult {
   summary: string;
@@ -34,6 +40,7 @@ function buildFallbackPostmortem(
   const edgeNo = num(data.trade_edge_no);
   const edgeOnSide = trade.side === "YES" ? edgeYes : edgeNo;
   const conf = num(data.confidence_score);
+  const modeledYes = num(data.modeled_yes_probability);
   const title = typeof data.market_title === "string" ? data.market_title : "market";
 
   const codes: string[] = [];
@@ -50,9 +57,11 @@ function buildFallbackPostmortem(
 
   const outcomeWord = settlement.settlement_value === 1 ? "YES" : "NO";
   const pnlBit = pnl !== null ? ` PnL ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}.` : "";
+  const modelBit =
+    modeledYes != null ? ` Model P(YES) at signal was ~${(modeledYes * 100).toFixed(0)}%.` : "";
   const summary = won
-    ? `Won ${trade.side} on ${title} (settled ${outcomeWord}).${pnlBit}`
-    : `Lost ${trade.side} on ${title} (settled ${outcomeWord}).${pnlBit}`;
+    ? `Won ${trade.side} on ${title} (settled ${outcomeWord}).${pnlBit}${modelBit}`
+    : `Lost ${trade.side} on ${title} (settled ${outcomeWord}).${pnlBit}${modelBit}`;
 
   return { summary, reasonCodes: codes };
 }
@@ -126,14 +135,25 @@ export async function generateAndSavePostmortem(
     }
   }
 
-  await insertPostmortem({
-    simulated_trade_id: trade.id,
-    created_at: new Date().toISOString(),
-    outcome_label: won ? "winner" : "loser",
-    reason_codes_json: result.reasonCodes,
-    summary: result.summary,
-    structured_json: tradeData,
-  });
+  const outcome_label = won ? "winner" : "loser";
+  const existing = await getPostmortemByTrade(trade.id);
+  if (existing) {
+    await updatePostmortemByTradeId(trade.id, {
+      summary: result.summary,
+      reason_codes_json: result.reasonCodes,
+      structured_json: tradeData,
+      outcome_label,
+    });
+  } else {
+    await insertPostmortem({
+      simulated_trade_id: trade.id,
+      created_at: new Date().toISOString(),
+      outcome_label,
+      reason_codes_json: result.reasonCodes,
+      summary: result.summary,
+      structured_json: tradeData,
+    });
+  }
 
   return result;
 }
