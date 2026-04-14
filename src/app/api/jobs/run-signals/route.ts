@@ -8,9 +8,22 @@ import {
 } from "@/lib/supabase/db";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
-import { generateSignalExplanation, generateNoTradeExplanation } from "@/lib/ai/explanations";
+import { generateSignalExplanation } from "@/lib/ai/explanations";
 import { openPaperTrade } from "@/lib/engine/simulation";
 import { appConfig } from "@/lib/config";
+
+/** Non-LLM line for Opportunities when we skip OpenAI (NO_TRADE). */
+function noTradeSummaryFromSignalData(data: {
+  modeled_yes_probability: number;
+  trade_edge_yes: number;
+  trade_edge_no: number;
+}): { summary: string; reasonCodes: string[] } {
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  return {
+    summary: `NO_TRADE · model P(YES) ${pct(data.modeled_yes_probability)} · edge YES ${pct(data.trade_edge_yes)} · edge NO ${pct(data.trade_edge_no)}`,
+    reasonCodes: [],
+  };
+}
 
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
@@ -77,12 +90,18 @@ export async function POST(req: Request) {
       };
 
       let explanation: { summary: string; reasonCodes: string[] };
-      try {
-        explanation = worthTrading
-          ? await generateSignalExplanation(signalData)
-          : await generateNoTradeExplanation(signalData);
-      } catch {
-        explanation = { summary: `Signal: ${action}`, reasonCodes: [] };
+      if (worthTrading) {
+        try {
+          explanation = await generateSignalExplanation(signalData);
+        } catch {
+          explanation = { summary: `Signal: ${action}`, reasonCodes: [] };
+        }
+      } else {
+        explanation = noTradeSummaryFromSignalData({
+          modeled_yes_probability: modeledYesProb,
+          trade_edge_yes: edges.tradeEdgeYes,
+          trade_edge_no: edges.tradeEdgeNo,
+        });
       }
 
       const signal = await insertSignal({
