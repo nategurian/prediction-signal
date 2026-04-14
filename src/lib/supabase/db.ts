@@ -250,6 +250,12 @@ export async function getRecentSignals(limit = 50): Promise<Signal[]> {
   return (data ?? []) as Signal[];
 }
 
+export async function getSignalById(id: string): Promise<Signal | null> {
+  const { data, error } = await db().from("signals").select("*").eq("id", id).single();
+  if (error && error.code !== "PGRST116") throw error;
+  return (data as Signal) ?? null;
+}
+
 export async function getDefaultAccount(): Promise<SimulatedAccount> {
   const { data, error } = await db()
     .from("simulated_accounts")

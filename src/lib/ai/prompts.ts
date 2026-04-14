@@ -64,4 +64,6 @@ Use these reason codes when applicable:
 - edge_too_thin
 - forecast_was_accurate
 - forecast_was_inaccurate
-- unexpected_weather_shift`;
+- unexpected_weather_shift
+- expensive_no_leg_tail_loss (paid a high NO price; loss is large when YES settles)
+- cheap_yes_leg_longshot_miss (paid a low YES price; many small losses, occasional big wins)`;
