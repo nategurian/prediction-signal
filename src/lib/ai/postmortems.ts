@@ -100,7 +100,7 @@ export async function generateAndSavePostmortem(
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
         temperature: 0.3,
-        max_tokens: 300,
+        max_tokens: 512,
       });
 
       const content = completion.choices[0]?.message?.content;

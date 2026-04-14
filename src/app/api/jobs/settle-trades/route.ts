@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { validateCronSecret } from "@/lib/utils/auth";
 import {
+  getExternalDataSnapshotById,
+  getModelOutputById,
   getOpenTrades,
   getSettlementByMarket,
   getSignalById,
@@ -46,6 +48,12 @@ export async function POST(req: Request) {
 
         try {
           const signal = await getSignalById(trade.signal_id);
+          const modelOutput = signal ? await getModelOutputById(signal.model_output_id) : null;
+          const externalSnapshot =
+            modelOutput?.external_data_id != null
+              ? await getExternalDataSnapshotById(modelOutput.external_data_id)
+              : null;
+
           const contractStyle = market.ticker.includes("-B")
             ? "bucket"
             : market.ticker.includes("-T")
@@ -74,6 +82,27 @@ export async function POST(req: Request) {
               trade_edge_yes: signal?.trade_edge_yes ?? null,
               trade_edge_no: signal?.trade_edge_no ?? null,
               model_version: signal?.model_version ?? null,
+              signal_captured_at: signal?.captured_at ?? null,
+              signal_explanation: signal?.explanation ?? null,
+              signal_entry_reason_codes: signal?.reason_codes_json ?? null,
+              model_at_signal: modelOutput
+                ? {
+                    captured_at: modelOutput.captured_at,
+                    modeled_probability_yes: modelOutput.modeled_probability,
+                    model_confidence_score: modelOutput.confidence_score,
+                    model_version: modelOutput.model_version,
+                    feature_json: modelOutput.feature_json,
+                  }
+                : null,
+              weather_snapshot_at_model: externalSnapshot
+                ? {
+                    captured_at: externalSnapshot.captured_at,
+                    source_name: externalSnapshot.source_name,
+                    niche_key: externalSnapshot.niche_key,
+                    city_key: externalSnapshot.city_key,
+                    normalized_weather: externalSnapshot.normalized_json,
+                  }
+                : null,
             }
           );
         } catch (err) {

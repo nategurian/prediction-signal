@@ -220,6 +220,22 @@ export async function getLatestModelOutput(marketId: string): Promise<ModelOutpu
   return (data as ModelOutput) ?? null;
 }
 
+export async function getModelOutputById(id: string): Promise<ModelOutput | null> {
+  const { data, error } = await db().from("model_outputs").select("*").eq("id", id).single();
+  if (error && error.code !== "PGRST116") throw error;
+  return (data as ModelOutput) ?? null;
+}
+
+export async function getExternalDataSnapshotById(id: string): Promise<ExternalDataSnapshot | null> {
+  const { data, error } = await db()
+    .from("external_data_snapshots")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  return (data as ExternalDataSnapshot) ?? null;
+}
+
 export async function insertModelOutput(output: Omit<ModelOutput, "id">): Promise<ModelOutput> {
   const { data, error } = await db()
     .from("model_outputs")

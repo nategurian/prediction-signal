@@ -42,7 +42,15 @@ Respond with valid JSON:
 
 export const POSTMORTEM_PROMPT = `You are a trade postmortem analyst for a prediction market signal engine.
 
-Analyze this settled trade and explain what happened:
+Analyze this settled trade and explain what happened.
+
+Trade data (JSON) includes, when available:
+- Execution: market, side, quantity, entry/exit prices, realized PnL.
+- Signal at entry: signal_type, modeled probabilities, edges, confidence, signal_explanation, signal_entry_reason_codes.
+- model_at_signal: the exact model run linked to this signal — modeled_probability_yes, model_confidence_score, feature_json (forecasted_high °F, sigma, threshold or bucket bounds, market_structure, yes/no bid-ask at run time, forecast revision vs previous run, climatology anomaly, lead time to local noon, current_temp).
+- weather_snapshot_at_model: Open-Meteo snapshot used for that run — normalized_weather (forecast_date, timestamps, hourly_temps_count, utc offset, etc.).
+
+Use forecasted_high vs the contract's threshold or bucket together with the actual market settlement (YES/NO) to judge whether forecast_was_accurate vs forecast_was_inaccurate is appropriate. Distinguish "forecast pointed the wrong way for this contract" from "forecast was plausible but the market price was wrong" when the data supports it.
 
 Trade data:
 {{tradeData}}
