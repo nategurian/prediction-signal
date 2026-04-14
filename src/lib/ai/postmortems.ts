@@ -33,7 +33,6 @@ function buildFallbackPostmortem(
   const edgeYes = num(data.trade_edge_yes);
   const edgeNo = num(data.trade_edge_no);
   const edgeOnSide = trade.side === "YES" ? edgeYes : edgeNo;
-  const pYes = num(data.modeled_yes_probability);
   const conf = num(data.confidence_score);
   const title = typeof data.market_title === "string" ? data.market_title : "market";
 
