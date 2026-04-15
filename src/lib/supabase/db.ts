@@ -12,6 +12,7 @@ export interface Market {
   market_structure: "binary_threshold" | "bucket_range";
   market_date: string | null;
   threshold_value: number | null;
+  threshold_direction: "greater" | "less" | null;
   bucket_lower: number | null;
   bucket_upper: number | null;
   close_time: string | null;

@@ -10,6 +10,7 @@ import {
   getSignalById,
   type TradePostmortem,
 } from "@/lib/supabase/db";
+import { fetchActualHighTemperature } from "@/lib/weather/client";
 
 const FAILED_SUMMARY = "Postmortem generation failed.";
 
@@ -87,11 +88,15 @@ export async function POST(req: Request) {
 
       try {
         const signal = await getSignalById(trade.signal_id);
+        const actualHighTemp = market.market_date
+          ? await fetchActualHighTemperature(market.market_date)
+          : null;
         const tradeData = await buildPostmortemTradePayload({
           trade,
           settledTrade: trade,
           market,
           signal,
+          actualHighTemp,
         });
 
         await generateAndSavePostmortem(trade, settlement, tradeData);

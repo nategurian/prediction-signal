@@ -3,6 +3,7 @@ import type { KalshiMarket } from "./types";
 export interface DerivedMarketMetadata {
   market_structure: "binary_threshold" | "bucket_range";
   threshold_value: number | null;
+  threshold_direction: "greater" | "less" | null;
   bucket_lower: number | null;
   bucket_upper: number | null;
 }
@@ -20,6 +21,7 @@ export function deriveMarketMetadataFromKalshi(km: KalshiMarket): DerivedMarketM
     return {
       market_structure: "bucket_range",
       threshold_value: null,
+      threshold_direction: null,
       bucket_lower: floor,
       bucket_upper: cap,
     };
@@ -34,16 +36,33 @@ export function deriveMarketMetadataFromKalshi(km: KalshiMarket): DerivedMarketM
     return {
       market_structure: "bucket_range",
       threshold_value: null,
+      threshold_direction: null,
       bucket_lower: lower,
       bucket_upper: upper,
     };
   }
+
+  let direction: "greater" | "less" | null = null;
+  if (strikeType === "greater") direction = "greater";
+  else if (strikeType === "less") direction = "less";
 
   const aboveMatch = title.match(/[>≥]\s*(\d+)\s*°/i);
   if (aboveMatch) {
     return {
       market_structure: "binary_threshold",
       threshold_value: parseInt(aboveMatch[1], 10),
+      threshold_direction: direction ?? "greater",
+      bucket_lower: null,
+      bucket_upper: null,
+    };
+  }
+
+  const belowMatch = title.match(/[<≤]\s*(\d+)\s*°/i);
+  if (belowMatch) {
+    return {
+      market_structure: "binary_threshold",
+      threshold_value: parseInt(belowMatch[1], 10),
+      threshold_direction: direction ?? "less",
       bucket_lower: null,
       bucket_upper: null,
     };
@@ -54,6 +73,7 @@ export function deriveMarketMetadataFromKalshi(km: KalshiMarket): DerivedMarketM
     return {
       market_structure: "binary_threshold",
       threshold_value: parseInt(fMatch[1], 10),
+      threshold_direction: direction,
       bucket_lower: null,
       bucket_upper: null,
     };
@@ -64,6 +84,7 @@ export function deriveMarketMetadataFromKalshi(km: KalshiMarket): DerivedMarketM
     return {
       market_structure: "binary_threshold",
       threshold_value: parseInt(tMatch[1], 10),
+      threshold_direction: direction,
       bucket_lower: null,
       bucket_upper: null,
     };
@@ -72,6 +93,7 @@ export function deriveMarketMetadataFromKalshi(km: KalshiMarket): DerivedMarketM
   return {
     market_structure: "binary_threshold",
     threshold_value: null,
+    threshold_direction: direction,
     bucket_lower: null,
     bucket_upper: null,
   };

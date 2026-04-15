@@ -40,17 +40,33 @@ Respond with valid JSON:
   "reasonCodes": ["code1", "code2", ...]
 }`;
 
-export const POSTMORTEM_PROMPT = `You are a trade postmortem analyst for a prediction market signal engine.
+export const POSTMORTEM_PROMPT = `You are a quantitative trade postmortem analyst for a prediction market signal engine focused on NYC weather temperature markets on Kalshi.
 
-Analyze this settled trade and explain what happened.
+Your job is to diagnose WHY a trade won or lost and produce ACTIONABLE insights for tuning the signal engine. Do not merely narrate the outcome.
+
+## Data provided
 
 Trade data (JSON) includes, when available:
-- Execution: market, side, quantity, entry/exit prices, realized PnL.
-- Signal at entry: signal_type, modeled probabilities, edges, confidence, signal_explanation, signal_entry_reason_codes.
-- model_at_signal: the exact model run linked to this signal — modeled_probability_yes, model_confidence_score, feature_json (forecasted_high °F, sigma, threshold or bucket bounds, market_structure, yes/no bid-ask at run time, forecast revision vs previous run, climatology anomaly, lead time to local noon, current_temp).
-- weather_snapshot_at_model: Open-Meteo snapshot used for that run — normalized_weather (forecast_date, timestamps, hourly_temps_count, utc offset, etc.).
+- Execution: market title/ticker, side (YES/NO), entry/exit prices, realized PnL, contract_style (threshold or bucket), threshold_direction (greater or less).
+- actual_high_temp: the real observed high temperature for that day (from Open-Meteo historical data). Compare this to forecasted_high.
+- Signal at entry: signal_type, modeled probabilities, edges, confidence.
+- model_at_signal.feature_json: forecasted_high °F, sigma, threshold or bucket bounds, market_structure, bid-ask at run time, forecast revision, climatology anomaly, lead time.
+- weather_snapshot_at_model: the Open-Meteo forecast used.
+- sanity_flags: pre-computed diagnostic flags (polarity_mismatch, forecast_accurate, forecast_inaccurate, sigma_tail_event, max_loss_entry).
 
-Use forecasted_high vs the contract's threshold or bucket together with the actual market settlement (YES/NO) to judge whether forecast_was_accurate vs forecast_was_inaccurate is appropriate. Distinguish "forecast pointed the wrong way for this contract" from "forecast was plausible but the market price was wrong" when the data supports it.
+## Analysis instructions
+
+Answer these five diagnostic questions:
+
+1. **Forecast accuracy**: How did actual_high_temp compare to forecasted_high? Was the forecast error within or outside sigma? If actual_high_temp is null, say "unknown".
+
+2. **Model calibration**: Was the modeled P(YES) reasonable given the forecast, threshold/bucket, and sigma? For threshold markets, check: does threshold_direction match the model's probability? A model assigning >50% P(YES) for a "less-than" market when forecast is well above threshold indicates a polarity error.
+
+3. **Market efficiency**: Was the market approximately right, or was there genuine mispricing the model could exploit?
+
+4. **Edge quality**: Was the trade edge sufficient given sigma and the risk of tail outcomes? For high-entry NO trades, was the risk/reward sensible?
+
+5. **Lesson**: What specific, concrete change to the signal engine parameters or rules would improve outcomes on trades like this? (e.g., "increase sigma for bucket markets", "add polarity awareness", "require wider edge for >80¢ entries").
 
 Trade data:
 {{tradeData}}
@@ -58,20 +74,26 @@ Trade data:
 Market outcome: {{outcome}}
 Model was {{correctness}} (the model predicted {{predictedSide}} and the outcome was {{actualOutcome}}).
 
-Respond with valid JSON:
+Respond with valid JSON matching this exact schema:
 {
-  "summary": "1-2 sentence postmortem",
-  "reasonCodes": ["code1", "code2", ...]
+  "narrative": "2-3 sentence diagnostic that explains the root cause, not just what happened",
+  "forecast_accuracy": "accurate" | "inaccurate" | "unknown",
+  "model_calibration": "well_calibrated" | "overconfident" | "underconfident" | "polarity_error",
+  "primary_failure_mode": "forecast_error" | "model_error" | "edge_too_thin" | "tail_risk" | "none",
+  "suggested_tuning": "one specific, actionable parameter or rule change",
+  "reasonCodes": ["code1", "code2"]
 }
 
 Use these reason codes when applicable:
 - model_correct_direction
 - model_wrong_direction
+- polarity_error (model had P(YES) inverted for a "less" threshold market)
 - small_margin_vs_sigma
 - model_overconfidence
 - edge_too_thin
-- forecast_was_accurate
-- forecast_was_inaccurate
+- forecast_was_accurate (actual within 1 sigma of forecast)
+- forecast_was_inaccurate (actual outside 1 sigma)
+- sigma_tail_event (actual outside 2 sigma)
 - unexpected_weather_shift
-- expensive_no_leg_tail_loss (paid a high NO price; loss is large when YES settles)
-- cheap_yes_leg_longshot_miss (paid a low YES price; many small losses, occasional big wins)`;
+- expensive_no_leg_tail_loss (paid ≥80¢ for NO; total loss when YES settles)
+- cheap_yes_leg_longshot_miss (paid ≤20¢ for YES; small loss, was a longshot)`;

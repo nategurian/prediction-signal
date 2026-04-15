@@ -1,14 +1,21 @@
 import { normalCdf } from "@/lib/utils/math";
 
+export type ThresholdDirection = "greater" | "less";
+
 /**
- * Binary threshold: P(actual_high > threshold)
- * "Will the temperature be above X degrees?"
+ * Binary threshold probability.
+ * direction "greater" (default): P(actual_high > threshold) — market asks "above X?"
+ * direction "less":              P(actual_high < threshold) — market asks "below X?"
  */
 export function computeBinaryProbability(
   forecastHigh: number,
   threshold: number,
-  sigma: number
+  sigma: number,
+  direction: ThresholdDirection = "greater"
 ): number {
+  if (direction === "less") {
+    return normalCdf(threshold, forecastHigh, sigma);
+  }
   return 1 - normalCdf(threshold, forecastHigh, sigma);
 }
 
@@ -30,6 +37,7 @@ export interface ProbabilityResult {
   modeledNoProbability: number;
   forecastHigh: number;
   threshold: number | null;
+  thresholdDirection: ThresholdDirection | null;
   bucketLower: number | null;
   bucketUpper: number | null;
   sigma: number;
@@ -39,6 +47,7 @@ export function computeModeledProbability(params: {
   forecastHigh: number;
   marketStructure: "binary_threshold" | "bucket_range";
   threshold?: number | null;
+  thresholdDirection?: ThresholdDirection | null;
   bucketLower?: number | null;
   bucketUpper?: number | null;
   sigma: number;
@@ -47,7 +56,8 @@ export function computeModeledProbability(params: {
 
   if (params.marketStructure === "binary_threshold") {
     if (params.threshold == null) throw new Error("threshold required for binary market");
-    pYes = computeBinaryProbability(params.forecastHigh, params.threshold, params.sigma);
+    const direction = params.thresholdDirection ?? "greater";
+    pYes = computeBinaryProbability(params.forecastHigh, params.threshold, params.sigma, direction);
   } else {
     if (params.bucketLower == null || params.bucketUpper == null) {
       throw new Error("bucket bounds required for bucket market");
@@ -65,6 +75,7 @@ export function computeModeledProbability(params: {
     modeledNoProbability: 1 - pYes,
     forecastHigh: params.forecastHigh,
     threshold: params.threshold ?? null,
+    thresholdDirection: params.thresholdDirection ?? null,
     bucketLower: params.bucketLower ?? null,
     bucketUpper: params.bucketUpper ?? null,
     sigma: params.sigma,

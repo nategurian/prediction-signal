@@ -64,6 +64,45 @@ export async function fetchWeatherForecast(): Promise<WeatherForecast> {
   };
 }
 
+const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
+
+/**
+ * Fetch the actual observed high temperature for a past date.
+ * Returns null on any failure so callers can degrade gracefully.
+ */
+export async function fetchActualHighTemperature(
+  date: string
+): Promise<number | null> {
+  try {
+    const { latitude, longitude } = appConfig.cityCoords;
+
+    const params = new URLSearchParams({
+      latitude: latitude.toString(),
+      longitude: longitude.toString(),
+      start_date: date,
+      end_date: date,
+      daily: "temperature_2m_max",
+      temperature_unit: "fahrenheit",
+      timezone: appConfig.timezone,
+    });
+
+    const res = await fetch(`${ARCHIVE_URL}?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      daily?: { temperature_2m_max?: number[] };
+    };
+
+    const temp = data.daily?.temperature_2m_max?.[0];
+    return typeof temp === "number" && Number.isFinite(temp) ? temp : null;
+  } catch {
+    return null;
+  }
+}
+
 function findClosestHourIndex(times: string[], target: Date): number {
   let closestIdx = 0;
   let closestDiff = Infinity;

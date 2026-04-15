@@ -38,6 +38,7 @@ async function upsertMarketAndSnapshotFromDetail(detail: KalshiMarket): Promise<
     market_structure: derived.market_structure,
     market_date: marketDate,
     threshold_value: derived.threshold_value,
+    threshold_direction: derived.threshold_direction,
     bucket_lower: derived.bucket_lower,
     bucket_upper: derived.bucket_upper,
     close_time: detail.close_time,

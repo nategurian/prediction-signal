@@ -35,6 +35,7 @@ describe("deriveMarketMetadataFromKalshi", () => {
     expect(m.bucket_lower).toBe(54);
     expect(m.bucket_upper).toBe(55);
     expect(m.threshold_value).toBeNull();
+    expect(m.threshold_direction).toBeNull();
   });
 
   it("detects range in title without API strikes", () => {
@@ -46,9 +47,10 @@ describe("deriveMarketMetadataFromKalshi", () => {
     expect(m.market_structure).toBe("bucket_range");
     expect(m.bucket_lower).toBe(54);
     expect(m.bucket_upper).toBe(55);
+    expect(m.threshold_direction).toBeNull();
   });
 
-  it("detects > threshold in title", () => {
+  it("detects > threshold in title → direction 'greater'", () => {
     const m = deriveMarketMetadataFromKalshi(
       baseKm({
         title: "Will the high temp be >67° on Apr 5, 2026?",
@@ -57,6 +59,42 @@ describe("deriveMarketMetadataFromKalshi", () => {
     );
     expect(m.market_structure).toBe("binary_threshold");
     expect(m.threshold_value).toBe(67);
+    expect(m.threshold_direction).toBe("greater");
+  });
+
+  it("detects < threshold in title → direction 'less'", () => {
+    const m = deriveMarketMetadataFromKalshi(
+      baseKm({
+        title: "Will the **high temp in NYC** be <83° on Apr 15, 2026?",
+        ticker: "KXHIGHNY-26APR15-T83",
+        strike_type: "less",
+      })
+    );
+    expect(m.market_structure).toBe("binary_threshold");
+    expect(m.threshold_value).toBe(83);
+    expect(m.threshold_direction).toBe("less");
+  });
+
+  it("uses strike_type 'greater' from API", () => {
+    const m = deriveMarketMetadataFromKalshi(
+      baseKm({
+        title: "Will the **high temp in NYC** be >90° on Apr 15, 2026?",
+        ticker: "KXHIGHNY-26APR15-T90",
+        strike_type: "greater",
+      })
+    );
+    expect(m.threshold_direction).toBe("greater");
+    expect(m.threshold_value).toBe(90);
+  });
+
+  it("uses strike_type 'less' from API even with generic title", () => {
+    const m = deriveMarketMetadataFromKalshi(
+      baseKm({
+        title: "Some generic 60°F market",
+        strike_type: "less",
+      })
+    );
+    expect(m.threshold_direction).toBe("less");
   });
 
   it("uses -T67 in ticker as fallback", () => {

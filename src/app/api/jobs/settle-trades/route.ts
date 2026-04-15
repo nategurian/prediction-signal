@@ -6,6 +6,7 @@ import { settleTrade } from "@/lib/engine/simulation";
 import { buildPostmortemTradePayload } from "@/lib/ai/postmortemTradePayload";
 import { generateAndSavePostmortem } from "@/lib/ai/postmortems";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { fetchActualHighTemperature } from "@/lib/weather/client";
 
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
@@ -42,11 +43,15 @@ export async function POST(req: Request) {
 
         try {
           const signal = await getSignalById(trade.signal_id);
+          const actualHighTemp = market.market_date
+            ? await fetchActualHighTemperature(market.market_date)
+            : null;
           const tradeData = await buildPostmortemTradePayload({
             trade,
             settledTrade,
             market,
             signal,
+            actualHighTemp,
           });
 
           await generateAndSavePostmortem(
