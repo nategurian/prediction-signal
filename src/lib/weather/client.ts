@@ -1,4 +1,4 @@
-import type { OpenMeteoResponse, WeatherForecast } from "./types";
+import type { OpenMeteoResponse, WeatherForecast, EnsembleForecast } from "./types";
 import { getCityConfig } from "@/lib/config";
 
 const BASE_URL = "https://api.open-meteo.com/v1/forecast";
@@ -117,4 +117,80 @@ function findClosestHourIndex(times: string[], target: Date): number {
   }
 
   return closestIdx;
+}
+
+const ENSEMBLE_URL = "https://ensemble-api.open-meteo.com/v1/ensemble";
+
+export function parseEnsembleMembers(
+  daily: Record<string, unknown>,
+  dayIndex: number
+): number[] {
+  const members: number[] = [];
+  for (const key of Object.keys(daily)) {
+    if (!key.startsWith("temperature_2m_max_member")) continue;
+    const arr = daily[key];
+    if (!Array.isArray(arr)) continue;
+    const val = arr[dayIndex];
+    if (typeof val === "number" && Number.isFinite(val)) {
+      members.push(val);
+    }
+  }
+  return members;
+}
+
+export async function fetchEnsembleForecast(
+  cityKey: string
+): Promise<EnsembleForecast | null> {
+  try {
+    const { cityCoords, timezone } = getCityConfig(cityKey);
+
+    const params = new URLSearchParams({
+      latitude: cityCoords.latitude.toString(),
+      longitude: cityCoords.longitude.toString(),
+      models: "ecmwf_ifs025",
+      daily: "temperature_2m_max",
+      temperature_unit: "fahrenheit",
+      timezone,
+      forecast_days: "3",
+    });
+
+    const res = await fetch(`${ENSEMBLE_URL}?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      console.warn(`Ensemble API error: ${res.status} ${res.statusText}`);
+      return null;
+    }
+
+    const data = await res.json();
+    const daily = data.daily as Record<string, unknown> | undefined;
+    if (!daily) return null;
+
+    const todayIndex = 0;
+    const times = daily.time as string[] | undefined;
+    if (!times || times.length === 0) return null;
+
+    const memberHighs = parseEnsembleMembers(daily, todayIndex);
+    if (memberHighs.length < 2) return null;
+
+    const mean = memberHighs.reduce((a, b) => a + b, 0) / memberHighs.length;
+    const variance =
+      memberHighs.reduce((sum, v) => sum + (v - mean) ** 2, 0) /
+      (memberHighs.length - 1);
+    const stdev = Math.sqrt(variance);
+
+    return {
+      ensembleMean: mean,
+      ensembleStdev: stdev,
+      ensembleMin: Math.min(...memberHighs),
+      ensembleMax: Math.max(...memberHighs),
+      memberCount: memberHighs.length,
+      memberHighs,
+      forecastDate: times[todayIndex],
+    };
+  } catch (err) {
+    console.warn("Ensemble forecast fetch failed:", err);
+    return null;
+  }
 }
