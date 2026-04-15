@@ -50,6 +50,25 @@ export async function POST(req: Request) {
 
         if (forecastedHigh == null || Number.isNaN(Number(forecastedHigh))) continue;
 
+        const ensembleAvailable = normalized.ensemble_available === true;
+        const ensembleSigmaUsed = normalized.ensemble_sigma_used;
+        const ensembleStdev = normalized.ensemble_stdev;
+        const ensembleMean = normalized.ensemble_mean;
+        const ensembleMemberCount = normalized.ensemble_member_count;
+
+        const effectiveSigma =
+          ensembleAvailable &&
+          typeof ensembleSigmaUsed === "number" &&
+          Number.isFinite(ensembleSigmaUsed)
+            ? ensembleSigmaUsed
+            : cityConfig.sigma;
+
+        const sigmaSource = ensembleAvailable &&
+          typeof ensembleSigmaUsed === "number" &&
+          Number.isFinite(ensembleSigmaUsed)
+            ? "ensemble" as const
+            : "static_fallback" as const;
+
         const probResult = computeModeledProbability({
           forecastHigh: forecastedHigh,
           marketStructure: market.market_structure,
@@ -57,7 +76,7 @@ export async function POST(req: Request) {
           thresholdDirection: market.threshold_direction,
           bucketLower: market.bucket_lower,
           bucketUpper: market.bucket_upper,
-          sigma: cityConfig.sigma,
+          sigma: effectiveSigma,
         });
 
         const confidence = computeConfidenceScore({
@@ -67,7 +86,7 @@ export async function POST(req: Request) {
           previousForecastHigh,
           yesBid: snapshot.yes_bid,
           yesAsk: snapshot.yes_ask,
-          sigma: cityConfig.sigma,
+          sigma: effectiveSigma,
         }, sharedConfig.confidenceWeights);
 
         const featureJson = {
@@ -87,7 +106,18 @@ export async function POST(req: Request) {
             Number.isFinite(forecastAnomalyVsClimatologyF)
               ? forecastAnomalyVsClimatologyF
               : null,
-          sigma: cityConfig.sigma,
+          sigma: effectiveSigma,
+          sigma_source: sigmaSource,
+          ensemble_stdev:
+            typeof ensembleStdev === "number" && Number.isFinite(ensembleStdev)
+              ? ensembleStdev
+              : null,
+          ensemble_mean:
+            typeof ensembleMean === "number" && Number.isFinite(ensembleMean)
+              ? ensembleMean
+              : null,
+          ensemble_member_count:
+            typeof ensembleMemberCount === "number" ? ensembleMemberCount : null,
           threshold: market.threshold_value,
           threshold_direction: market.threshold_direction,
           bucket_lower: market.bucket_lower,
