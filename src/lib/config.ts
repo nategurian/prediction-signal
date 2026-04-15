@@ -3,6 +3,7 @@ export interface CityConfig {
   timezone: string;
   seriesTicker: string;
   sigma: number;
+  sigmaFloor: number;
   modelVersion: string;
 
   minTradeEdge: number;
@@ -38,7 +39,8 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     timezone: "America/New_York",
     seriesTicker: "KXHIGHNY",
     sigma: 3.5,
-    modelVersion: "weather_temp_v2",
+    sigmaFloor: 1.5,
+    modelVersion: "weather_temp_v3",
     ...SHARED_TRADING_DEFAULTS,
   },
   miami: {
@@ -46,7 +48,8 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     timezone: "America/New_York",
     seriesTicker: "KXHIGHMIA",
     sigma: 2.5,
-    modelVersion: "weather_temp_v2",
+    sigmaFloor: 1.5,
+    modelVersion: "weather_temp_v3",
     ...SHARED_TRADING_DEFAULTS,
   },
 };
