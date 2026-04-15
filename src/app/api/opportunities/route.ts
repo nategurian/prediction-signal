@@ -81,6 +81,17 @@ export async function GET() {
           const forecastedHigh = normalized.forecasted_high as number;
           const forecastTimestamp = normalized.forecast_timestamp as string;
           const previousForecastHigh = normalized.previous_forecast_high as number | null;
+
+          const ensembleAvailable = normalized.ensemble_available === true;
+          const ensembleSigmaUsed = normalized.ensemble_sigma_used;
+
+          const effectiveSigma =
+            ensembleAvailable &&
+            typeof ensembleSigmaUsed === "number" &&
+            Number.isFinite(ensembleSigmaUsed)
+              ? ensembleSigmaUsed
+              : cityConfig.sigma;
+
           const canModel =
             market.market_structure === "binary_threshold"
               ? market.threshold_value != null
@@ -98,7 +109,7 @@ export async function GET() {
                 threshold: market.threshold_value,
                 bucketLower: market.bucket_lower,
                 bucketUpper: market.bucket_upper,
-                sigma: cityConfig.sigma,
+                sigma: effectiveSigma,
               });
               confidenceScore = computeConfidenceScore({
                 forecastTimestamp,
@@ -107,7 +118,7 @@ export async function GET() {
                 previousForecastHigh,
                 yesBid: snapshot.yes_bid,
                 yesAsk: snapshot.yes_ask,
-                sigma: cityConfig.sigma,
+                sigma: effectiveSigma,
               }, sharedConfig.confidenceWeights);
               modeledYesProb = probResult.modeledYesProbability;
             } catch (err) {
