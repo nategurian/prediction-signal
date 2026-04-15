@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { validateCronSecret } from "@/lib/utils/auth";
-import { fetchWeatherForecast } from "@/lib/weather/client";
+import { fetchWeatherForecast, fetchEnsembleForecast } from "@/lib/weather/client";
 import { buildNormalizedExternalJson } from "@/lib/weather/normalizeExternal";
 import { validateForecastPayload } from "@/lib/weather/validateForecast";
 import {
   insertExternalDataSnapshot,
   getLatestExternalData,
 } from "@/lib/supabase/db";
-import { getAllCityKeys, sharedConfig } from "@/lib/config";
+import { getAllCityKeys, getCityConfig, sharedConfig } from "@/lib/config";
 
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
@@ -27,6 +27,9 @@ export async function POST(req: Request) {
           ? (previous.normalized_json as Record<string, unknown>).forecasted_high as number | null
           : null;
 
+        const cityConfig = getCityConfig(cityKey);
+        const ensemble = await fetchEnsembleForecast(cityKey);
+
         const validation = validateForecastPayload({
           forecastedHigh: forecast.forecastedHigh,
           forecastDate: forecast.forecastDate,
@@ -43,7 +46,8 @@ export async function POST(req: Request) {
         const normalizedJson = buildNormalizedExternalJson(
           forecast,
           previousForecastHigh,
-          cityKey
+          cityKey,
+          { ensemble, sigmaFloor: cityConfig.sigmaFloor }
         );
 
         const snapshot = await insertExternalDataSnapshot({
