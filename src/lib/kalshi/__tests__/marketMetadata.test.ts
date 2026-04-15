@@ -107,12 +107,12 @@ describe("deriveMarketMetadataFromKalshi", () => {
     expect(m.threshold_value).toBe(67);
   });
 
-  it("parses Miami ticker KXHIGHMI threshold", () => {
+  it("parses Miami ticker KXHIGHMIA threshold", () => {
     const m = deriveMarketMetadataFromKalshi(
       baseKm({
         title: "Will the **high temp in Miami** be >90° on Apr 15, 2026?",
-        ticker: "KXHIGHMI-26APR15-T90",
-        event_ticker: "KXHIGHMI-26APR15",
+        ticker: "KXHIGHMIA-26APR15-T90",
+        event_ticker: "KXHIGHMIA-26APR15",
         strike_type: "greater",
       })
     );
@@ -125,8 +125,8 @@ describe("deriveMarketMetadataFromKalshi", () => {
     const m = deriveMarketMetadataFromKalshi(
       baseKm({
         title: "Will the **high temp in Miami** be 88-89° on Apr 15, 2026?",
-        ticker: "KXHIGHMI-26APR15-B88.5",
-        event_ticker: "KXHIGHMI-26APR15",
+        ticker: "KXHIGHMIA-26APR15-B88.5",
+        event_ticker: "KXHIGHMIA-26APR15",
         strike_type: "between",
         floor_strike: 88,
         cap_strike: 89,

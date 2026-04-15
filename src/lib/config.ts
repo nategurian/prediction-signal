@@ -44,7 +44,7 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
   miami: {
     cityCoords: { latitude: 25.7617, longitude: -80.1918 },
     timezone: "America/New_York",
-    seriesTicker: "KXHIGHMI",
+    seriesTicker: "KXHIGHMIA",
     sigma: 2.5,
     modelVersion: "weather_temp_v2",
     ...SHARED_TRADING_DEFAULTS,
