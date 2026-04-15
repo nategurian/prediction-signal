@@ -65,8 +65,17 @@ export function selectAction(params: ActionSelectionParams): SignalAction {
     if (minutes < appConfig.maxMinutesBeforeSettlementToEnter) return "NO_TRADE";
   }
 
-  const yesQualified = tradeEdgeYes >= appConfig.minTradeEdge && yesSpread <= appConfig.maxSpread;
-  const noQualified = tradeEdgeNo >= appConfig.minTradeEdge && noSpread <= appConfig.maxSpread;
+  const yesMinEdge =
+    yesAsk >= appConfig.highEntryThreshold
+      ? appConfig.highEntryMinEdge
+      : appConfig.minTradeEdge;
+  const noMinEdge =
+    noAsk >= appConfig.highEntryThreshold
+      ? appConfig.highEntryMinEdge
+      : appConfig.minTradeEdge;
+
+  const yesQualified = tradeEdgeYes >= yesMinEdge && yesSpread <= appConfig.maxSpread;
+  const noQualified = tradeEdgeNo >= noMinEdge && noSpread <= appConfig.maxSpread;
 
   if (yesQualified && noQualified) {
     return tradeEdgeYes >= tradeEdgeNo ? "BUY_YES" : "BUY_NO";

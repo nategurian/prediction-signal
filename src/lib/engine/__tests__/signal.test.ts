@@ -57,7 +57,7 @@ describe("selectAction — economic test cases from Section 23", () => {
     expect(action).toBe("BUY_YES");
   });
 
-  it("Case C: modeled YES=0.10, NO ask=0.82 → BUY_NO only if edge survives", () => {
+  it("Case C: modeled YES=0.10, NO ask=0.82 → NO_TRADE (high-entry guard requires 10% edge)", () => {
     const edges = computeTradeEdges(0.1, 0.88, 0.82);
     const action = selectAction({
       ...baseParams,
@@ -69,11 +69,7 @@ describe("selectAction — economic test cases from Section 23", () => {
       noAsk: 0.82,
       noBid: 0.80,
     });
-    if (edges.tradeEdgeNo >= 0.05) {
-      expect(action).toBe("BUY_NO");
-    } else {
-      expect(action).toBe("NO_TRADE");
-    }
+    expect(action).toBe("NO_TRADE");
   });
 
   it("Case D: both sides negative after costs → NO_TRADE", () => {
@@ -135,6 +131,69 @@ describe("selectAction — economic test cases from Section 23", () => {
       noBid: 0.30,
     });
     expect(action).toBe("NO_TRADE");
+  });
+});
+
+describe("selectAction — high-entry edge guard", () => {
+  const baseParams = {
+    settlementTime: null,
+    hasOpenTradeForMarket: false,
+  };
+
+  it("NO at 85¢ with 7% edge → NO_TRADE (below highEntryMinEdge of 10%)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: -0.10,
+      tradeEdgeNo: 0.07,
+      confidenceScore: 0.8,
+      yesAsk: 0.88,
+      yesBid: 0.86,
+      noAsk: 0.85,
+      noBid: 0.83,
+    });
+    expect(action).toBe("NO_TRADE");
+  });
+
+  it("NO at 85¢ with 12% edge → BUY_NO (above highEntryMinEdge)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: -0.10,
+      tradeEdgeNo: 0.12,
+      confidenceScore: 0.8,
+      yesAsk: 0.88,
+      yesBid: 0.86,
+      noAsk: 0.85,
+      noBid: 0.83,
+    });
+    expect(action).toBe("BUY_NO");
+  });
+
+  it("YES at 82¢ with 7% edge → NO_TRADE (high entry applies to YES too)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: 0.07,
+      tradeEdgeNo: -0.10,
+      confidenceScore: 0.8,
+      yesAsk: 0.82,
+      yesBid: 0.80,
+      noAsk: 0.20,
+      noBid: 0.18,
+    });
+    expect(action).toBe("NO_TRADE");
+  });
+
+  it("NO at 50¢ with 7% edge → BUY_NO (normal minTradeEdge applies)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: -0.10,
+      tradeEdgeNo: 0.07,
+      confidenceScore: 0.8,
+      yesAsk: 0.48,
+      yesBid: 0.46,
+      noAsk: 0.50,
+      noBid: 0.48,
+    });
+    expect(action).toBe("BUY_NO");
   });
 });
 

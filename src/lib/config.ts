@@ -4,7 +4,7 @@ export const appConfig = {
   cityCoords: { latitude: 40.7128, longitude: -74.006 },
   timezone: "America/New_York",
 
-  sigma: 2.5,
+  sigma: 3.5,
   minTradeEdge: 0.05,
   minConfidenceScore: 0.6,
   maxSpread: 0.06,
@@ -14,7 +14,12 @@ export const appConfig = {
   maxMinutesBeforeSettlementToEnter: 180,
   fixedTradeQuantity: 10,
 
-  modelVersion: "weather_temp_v1",
+  /** Entry prices at or above this trigger the highEntryMinEdge requirement. */
+  highEntryThreshold: 0.80,
+  /** Minimum edge required when entry price >= highEntryThreshold. */
+  highEntryMinEdge: 0.10,
+
+  modelVersion: "weather_temp_v2",
 
   confidenceWeights: {
     forecastFreshness: 0.35,
