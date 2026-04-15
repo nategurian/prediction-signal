@@ -33,3 +33,13 @@ export interface WeatherForecast {
   utcOffsetSeconds: number;
   rawResponse: OpenMeteoResponse;
 }
+
+export interface EnsembleForecast {
+  ensembleMean: number;
+  ensembleStdev: number;
+  ensembleMin: number;
+  ensembleMax: number;
+  memberCount: number;
+  memberHighs: number[];
+  forecastDate: string;
+}
