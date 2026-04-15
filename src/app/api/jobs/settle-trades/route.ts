@@ -44,7 +44,7 @@ export async function POST(req: Request) {
         try {
           const signal = await getSignalById(trade.signal_id);
           const actualHighTemp = market.market_date
-            ? await fetchActualHighTemperature(market.market_date)
+            ? await fetchActualHighTemperature(market.market_date, market.city_key)
             : null;
           const tradeData = await buildPostmortemTradePayload({
             trade,

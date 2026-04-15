@@ -1,18 +1,18 @@
 import type { OpenMeteoResponse, WeatherForecast } from "./types";
-import { appConfig } from "@/lib/config";
+import { getCityConfig } from "@/lib/config";
 
 const BASE_URL = "https://api.open-meteo.com/v1/forecast";
 
-export async function fetchWeatherForecast(): Promise<WeatherForecast> {
-  const { latitude, longitude } = appConfig.cityCoords;
+export async function fetchWeatherForecast(cityKey: string): Promise<WeatherForecast> {
+  const { cityCoords, timezone } = getCityConfig(cityKey);
 
   const params = new URLSearchParams({
-    latitude: latitude.toString(),
-    longitude: longitude.toString(),
+    latitude: cityCoords.latitude.toString(),
+    longitude: cityCoords.longitude.toString(),
     daily: "temperature_2m_max",
     hourly: "temperature_2m",
     temperature_unit: "fahrenheit",
-    timezone: appConfig.timezone,
+    timezone,
     forecast_days: "3",
   });
 
@@ -71,19 +71,20 @@ const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
  * Returns null on any failure so callers can degrade gracefully.
  */
 export async function fetchActualHighTemperature(
-  date: string
+  date: string,
+  cityKey: string
 ): Promise<number | null> {
   try {
-    const { latitude, longitude } = appConfig.cityCoords;
+    const { cityCoords, timezone } = getCityConfig(cityKey);
 
     const params = new URLSearchParams({
-      latitude: latitude.toString(),
-      longitude: longitude.toString(),
+      latitude: cityCoords.latitude.toString(),
+      longitude: cityCoords.longitude.toString(),
       start_date: date,
       end_date: date,
       daily: "temperature_2m_max",
       temperature_unit: "fahrenheit",
-      timezone: appConfig.timezone,
+      timezone,
     });
 
     const res = await fetch(`${ARCHIVE_URL}?${params.toString()}`, {

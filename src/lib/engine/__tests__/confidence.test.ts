@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { computeConfidenceScore } from "../confidence";
+import type { ConfidenceWeights } from "@/lib/config";
+
+const defaultWeights: ConfidenceWeights = {
+  forecastFreshness: 0.35,
+  thresholdDistance: 0.35,
+  revisionStability: 0.2,
+  spreadQuality: 0.1,
+};
 
 describe("computeConfidenceScore", () => {
   it("returns value between 0 and 1", () => {
@@ -11,7 +19,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.70,
       yesAsk: 0.72,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     expect(score).toBeGreaterThanOrEqual(0);
     expect(score).toBeLessThanOrEqual(1);
   });
@@ -25,7 +33,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.94,
       yesAsk: 0.95,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     expect(score).toBeGreaterThan(0.7);
   });
 
@@ -39,7 +47,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.94,
       yesAsk: 0.95,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     expect(score).toBeLessThan(0.7);
   });
 
@@ -52,7 +60,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.49,
       yesAsk: 0.51,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     const farFromThreshold = computeConfidenceScore({
       forecastTimestamp: new Date().toISOString(),
       forecastHigh: 85,
@@ -61,7 +69,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.49,
       yesAsk: 0.51,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     expect(farFromThreshold).toBeGreaterThan(atThreshold);
   });
 
@@ -74,7 +82,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.70,
       yesAsk: 0.72,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     const volatile = computeConfidenceScore({
       forecastTimestamp: new Date().toISOString(),
       forecastHigh: 80,
@@ -83,7 +91,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.70,
       yesAsk: 0.72,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     expect(stable).toBeGreaterThan(volatile);
   });
 
@@ -96,7 +104,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.70,
       yesAsk: 0.72,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     expect(score).toBeGreaterThanOrEqual(0);
     expect(score).toBeLessThanOrEqual(1);
   });
@@ -110,7 +118,7 @@ describe("computeConfidenceScore", () => {
       yesBid: 0.70,
       yesAsk: 0.72,
       sigma: 2.5,
-    });
+    }, defaultWeights);
     expect(score).toBeGreaterThanOrEqual(0);
     expect(score).toBeLessThanOrEqual(1);
   });

@@ -1,9 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { computeTradeEdges, selectAction } from "../signal";
+import { computeTradeEdges, selectAction, type TradingConfig } from "../signal";
+
+const defaultConfig: TradingConfig = {
+  slippagePenalty: 0.01,
+  feePenalty: 0.0,
+  uncertaintyBuffer: 0.02,
+  minTradeEdge: 0.05,
+  minConfidenceScore: 0.6,
+  maxSpread: 0.06,
+  maxMinutesBeforeSettlementToEnter: 180,
+  highEntryThreshold: 0.80,
+  highEntryMinEdge: 0.10,
+};
 
 describe("computeTradeEdges", () => {
   it("computes effective entry and edge correctly", () => {
-    const result = computeTradeEdges(0.7, 0.58, 0.38);
+    const result = computeTradeEdges(0.7, 0.58, 0.38, defaultConfig);
     expect(result.effectiveYesEntry).toBeCloseTo(0.61, 2);
     expect(result.effectiveNoEntry).toBeCloseTo(0.41, 2);
     expect(result.tradeEdgeYes).toBeCloseTo(0.09, 2);
@@ -11,7 +23,7 @@ describe("computeTradeEdges", () => {
   });
 
   it("high probability thin edge", () => {
-    const result = computeTradeEdges(0.99, 0.98, 0.03);
+    const result = computeTradeEdges(0.99, 0.98, 0.03, defaultConfig);
     expect(result.effectiveYesEntry).toBeCloseTo(1.01, 2);
     expect(result.tradeEdgeYes).toBeLessThan(0);
   });
@@ -28,7 +40,7 @@ describe("selectAction — economic test cases from Section 23", () => {
   };
 
   it("Case A: modeled YES=0.99, YES ask=0.98 → NO_TRADE (edge too thin after buffers)", () => {
-    const edges = computeTradeEdges(0.99, 0.98, 0.03);
+    const edges = computeTradeEdges(0.99, 0.98, 0.03, defaultConfig);
     const action = selectAction({
       ...baseParams,
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -38,12 +50,12 @@ describe("selectAction — economic test cases from Section 23", () => {
       yesBid: 0.96,
       noAsk: 0.03,
       noBid: 0.01,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 
   it("Case B: modeled YES=0.70, YES ask=0.58 → BUY_YES (positive edge after buffers)", () => {
-    const edges = computeTradeEdges(0.7, 0.58, 0.38);
+    const edges = computeTradeEdges(0.7, 0.58, 0.38, defaultConfig);
     const action = selectAction({
       ...baseParams,
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -53,12 +65,12 @@ describe("selectAction — economic test cases from Section 23", () => {
       yesBid: 0.56,
       noAsk: 0.38,
       noBid: 0.36,
-    });
+    }, defaultConfig);
     expect(action).toBe("BUY_YES");
   });
 
   it("Case C: modeled YES=0.10, NO ask=0.82 → NO_TRADE (high-entry guard requires 10% edge)", () => {
-    const edges = computeTradeEdges(0.1, 0.88, 0.82);
+    const edges = computeTradeEdges(0.1, 0.88, 0.82, defaultConfig);
     const action = selectAction({
       ...baseParams,
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -68,12 +80,12 @@ describe("selectAction — economic test cases from Section 23", () => {
       yesBid: 0.86,
       noAsk: 0.82,
       noBid: 0.80,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 
   it("Case D: both sides negative after costs → NO_TRADE", () => {
-    const edges = computeTradeEdges(0.5, 0.52, 0.52);
+    const edges = computeTradeEdges(0.5, 0.52, 0.52, defaultConfig);
     const action = selectAction({
       ...baseParams,
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -83,12 +95,12 @@ describe("selectAction — economic test cases from Section 23", () => {
       yesBid: 0.50,
       noAsk: 0.52,
       noBid: 0.50,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 
   it("duplicate open trade → NO_TRADE regardless of edge", () => {
-    const edges = computeTradeEdges(0.7, 0.50, 0.40);
+    const edges = computeTradeEdges(0.7, 0.50, 0.40, defaultConfig);
     const action = selectAction({
       ...baseParams,
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -99,12 +111,12 @@ describe("selectAction — economic test cases from Section 23", () => {
       noAsk: 0.40,
       noBid: 0.38,
       hasOpenTradeForMarket: true,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 
   it("low confidence → NO_TRADE regardless of edge", () => {
-    const edges = computeTradeEdges(0.7, 0.50, 0.40);
+    const edges = computeTradeEdges(0.7, 0.50, 0.40, defaultConfig);
     const action = selectAction({
       ...baseParams,
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -114,12 +126,12 @@ describe("selectAction — economic test cases from Section 23", () => {
       yesBid: 0.48,
       noAsk: 0.40,
       noBid: 0.38,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 
   it("wide spread → NO_TRADE", () => {
-    const edges = computeTradeEdges(0.7, 0.50, 0.40);
+    const edges = computeTradeEdges(0.7, 0.50, 0.40, defaultConfig);
     const action = selectAction({
       ...baseParams,
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -129,7 +141,7 @@ describe("selectAction — economic test cases from Section 23", () => {
       yesBid: 0.40,
       noAsk: 0.50,
       noBid: 0.30,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 });
@@ -150,7 +162,7 @@ describe("selectAction — high-entry edge guard", () => {
       yesBid: 0.86,
       noAsk: 0.85,
       noBid: 0.83,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 
@@ -164,7 +176,7 @@ describe("selectAction — high-entry edge guard", () => {
       yesBid: 0.86,
       noAsk: 0.85,
       noBid: 0.83,
-    });
+    }, defaultConfig);
     expect(action).toBe("BUY_NO");
   });
 
@@ -178,7 +190,7 @@ describe("selectAction — high-entry edge guard", () => {
       yesBid: 0.80,
       noAsk: 0.20,
       noBid: 0.18,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 
@@ -192,14 +204,14 @@ describe("selectAction — high-entry edge guard", () => {
       yesBid: 0.46,
       noAsk: 0.50,
       noBid: 0.48,
-    });
+    }, defaultConfig);
     expect(action).toBe("BUY_NO");
   });
 });
 
 describe("selectAction — settlement time cutoff", () => {
   it("too close to settlement → NO_TRADE", () => {
-    const edges = computeTradeEdges(0.7, 0.50, 0.40);
+    const edges = computeTradeEdges(0.7, 0.50, 0.40, defaultConfig);
     const inOneHour = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const action = selectAction({
       tradeEdgeYes: edges.tradeEdgeYes,
@@ -211,7 +223,7 @@ describe("selectAction — settlement time cutoff", () => {
       noBid: 0.38,
       settlementTime: inOneHour,
       hasOpenTradeForMarket: false,
-    });
+    }, defaultConfig);
     expect(action).toBe("NO_TRADE");
   });
 });

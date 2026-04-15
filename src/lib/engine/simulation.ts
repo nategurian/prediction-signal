@@ -10,7 +10,7 @@ import {
   type Signal,
   type Market,
 } from "@/lib/supabase/db";
-import { appConfig } from "@/lib/config";
+import { getCityConfig } from "@/lib/config";
 
 export async function openPaperTrade(
   signal: Signal,
@@ -28,14 +28,15 @@ export async function openPaperTrade(
 
   if (askPrice == null) return null;
 
-  const entryPrice = askPrice + appConfig.slippagePenalty;
+  const cityConfig = getCityConfig(market.city_key);
+  const entryPrice = askPrice + cityConfig.slippagePenalty;
 
   return insertSimulatedTrade({
     account_id: account.id,
     market_id: market.id,
     signal_id: signal.id,
     side,
-    quantity: appConfig.fixedTradeQuantity,
+    quantity: cityConfig.fixedTradeQuantity,
     entry_time: new Date().toISOString(),
     entry_price: entryPrice,
     current_mark_price: askPrice,

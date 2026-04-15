@@ -106,4 +106,34 @@ describe("deriveMarketMetadataFromKalshi", () => {
     );
     expect(m.threshold_value).toBe(67);
   });
+
+  it("parses Miami ticker KXHIGHMI threshold", () => {
+    const m = deriveMarketMetadataFromKalshi(
+      baseKm({
+        title: "Will the **high temp in Miami** be >90° on Apr 15, 2026?",
+        ticker: "KXHIGHMI-26APR15-T90",
+        event_ticker: "KXHIGHMI-26APR15",
+        strike_type: "greater",
+      })
+    );
+    expect(m.market_structure).toBe("binary_threshold");
+    expect(m.threshold_value).toBe(90);
+    expect(m.threshold_direction).toBe("greater");
+  });
+
+  it("parses Miami bucket ticker", () => {
+    const m = deriveMarketMetadataFromKalshi(
+      baseKm({
+        title: "Will the **high temp in Miami** be 88-89° on Apr 15, 2026?",
+        ticker: "KXHIGHMI-26APR15-B88.5",
+        event_ticker: "KXHIGHMI-26APR15",
+        strike_type: "between",
+        floor_strike: 88,
+        cap_strike: 89,
+      })
+    );
+    expect(m.market_structure).toBe("bucket_range");
+    expect(m.bucket_lower).toBe(88);
+    expect(m.bucket_upper).toBe(89);
+  });
 });

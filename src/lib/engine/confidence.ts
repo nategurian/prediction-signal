@@ -1,6 +1,6 @@
 import { clamp } from "@/lib/utils/math";
 import { hoursAgo } from "@/lib/utils/time";
-import { appConfig } from "@/lib/config";
+import type { ConfidenceWeights } from "@/lib/config";
 
 export interface ConfidenceInputs {
   forecastTimestamp: string;
@@ -61,9 +61,7 @@ function computeSpreadQualityComponent(
   return 0.2;
 }
 
-export function computeConfidenceScore(inputs: ConfidenceInputs): number {
-  const w = appConfig.confidenceWeights;
-
+export function computeConfidenceScore(inputs: ConfidenceInputs, weights: ConfidenceWeights): number {
   const freshness = computeFreshnessComponent(inputs.forecastTimestamp);
   const thresholdDist = computeThresholdDistanceComponent(
     inputs.forecastHigh,
@@ -78,10 +76,10 @@ export function computeConfidenceScore(inputs: ConfidenceInputs): number {
   const spreadQuality = computeSpreadQualityComponent(inputs.yesBid, inputs.yesAsk);
 
   const score =
-    w.forecastFreshness * freshness +
-    w.thresholdDistance * thresholdDist +
-    w.revisionStability * revisionStability +
-    w.spreadQuality * spreadQuality;
+    weights.forecastFreshness * freshness +
+    weights.thresholdDistance * thresholdDist +
+    weights.revisionStability * revisionStability +
+    weights.spreadQuality * spreadQuality;
 
   return clamp(score, 0, 1);
 }

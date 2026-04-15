@@ -99,14 +99,13 @@ export class KalshiClient {
     return this.request<KalshiEventsResponse>("GET", endpoint);
   }
 
-  async getAllWeatherMarkets(): Promise<KalshiMarket[]> {
+  async getMarketsBySeries(seriesTicker: string): Promise<KalshiMarket[]> {
     const allMarkets: KalshiMarket[] = [];
     let cursor: string | undefined;
 
     do {
       const resp = await this.getMarkets({
-        series_ticker: "KXHIGHNY",
-        // Kalshi GET /markets only accepts unopened | open | closed | settled — not "active"
+        series_ticker: seriesTicker,
         status: "open",
         cursor,
         limit: 100,
@@ -117,6 +116,15 @@ export class KalshiClient {
       cursor = resp.cursor || undefined;
     } while (cursor);
 
+    return allMarkets;
+  }
+
+  async getAllWeatherMarkets(seriesTickers: string[]): Promise<KalshiMarket[]> {
+    const allMarkets: KalshiMarket[] = [];
+    for (const ticker of seriesTickers) {
+      const markets = await this.getMarketsBySeries(ticker);
+      allMarkets.push(...markets);
+    }
     return allMarkets;
   }
 }

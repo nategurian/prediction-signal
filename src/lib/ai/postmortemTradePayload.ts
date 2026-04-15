@@ -1,5 +1,5 @@
 import type { PostmortemTradeData } from "@/lib/ai/postmortems";
-import { appConfig } from "@/lib/config";
+import { getCityConfig } from "@/lib/config";
 import {
   getExternalDataSnapshotById,
   getModelOutputById,
@@ -115,7 +115,7 @@ export async function buildPostmortemTradePayload(args: {
     threshold: market.threshold_value,
     entryPrice: trade.entry_price,
     won,
-    sigma: appConfig.sigma,
+    sigma: getCityConfig(market.city_key).sigma,
   });
 
   return {

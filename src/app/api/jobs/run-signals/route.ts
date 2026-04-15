@@ -10,7 +10,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
 import { generateSignalExplanation } from "@/lib/ai/explanations";
 import { openPaperTrade } from "@/lib/engine/simulation";
-import { appConfig } from "@/lib/config";
+import { getCityConfig } from "@/lib/config";
 
 /** Non-LLM line for Opportunities when we skip OpenAI (NO_TRADE). */
 function noTradeSummaryFromSignalData(data: {
@@ -35,6 +35,8 @@ export async function POST(req: Request) {
     let tradesOpened = 0;
 
     for (const market of markets) {
+      const cityConfig = getCityConfig(market.city_key);
+
       const snapshot = await getLatestSnapshot(market.id);
       if (!snapshot || snapshot.yes_ask == null || snapshot.no_ask == null) continue;
 
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
       if (!modelOutput) continue;
 
       const modeledYesProb = modelOutput.modeled_probability as number;
-      const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask);
+      const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask, cityConfig);
 
       const existingTrades = await getTradesForMarket(market.id);
       const hasOpenTrade = existingTrades.length > 0;
@@ -65,7 +67,7 @@ export async function POST(req: Request) {
         noBid: snapshot.no_bid ?? 0,
         settlementTime: market.settlement_time,
         hasOpenTradeForMarket: hasOpenTrade,
-      });
+      }, cityConfig);
 
       const worthTrading = action !== "NO_TRADE";
 
@@ -86,7 +88,7 @@ export async function POST(req: Request) {
         effective_no_entry: edges.effectiveNoEntry,
         confidence_score: modelOutput.confidence_score,
         signal_type: action,
-        model_version: appConfig.modelVersion,
+        model_version: cityConfig.modelVersion,
       };
 
       let explanation: { summary: string; reasonCodes: string[] };
@@ -120,7 +122,7 @@ export async function POST(req: Request) {
         trade_edge_yes: edges.tradeEdgeYes,
         trade_edge_no: edges.tradeEdgeNo,
         worth_trading: worthTrading,
-        model_version: appConfig.modelVersion,
+        model_version: cityConfig.modelVersion,
       });
 
       signalsCreated++;

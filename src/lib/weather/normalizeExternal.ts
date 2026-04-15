@@ -1,4 +1,4 @@
-import { appConfig } from "@/lib/config";
+import { getCityConfig } from "@/lib/config";
 import { climatologyNormalHighFahrenheit } from "./climatology";
 import { leadTimeHoursToForecastLocalNoon as computeLeadHoursToForecastLocalNoon } from "./zonedTime";
 import type { WeatherForecast } from "./types";
@@ -9,12 +9,13 @@ export function buildNormalizedExternalJson(
   previousForecastHigh: number | null,
   cityKey: string
 ): Record<string, unknown> {
+  const { timezone } = getCityConfig(cityKey);
   const climatologyNormalHighF = climatologyNormalHighFahrenheit(cityKey, forecast.forecastDate);
   const forecastAnomalyVsClimatologyF = forecast.forecastedHigh - climatologyNormalHighF;
   const leadHours = computeLeadHoursToForecastLocalNoon(
     forecast.forecastTimestamp,
     forecast.forecastDate,
-    appConfig.timezone
+    timezone
   );
 
   return {

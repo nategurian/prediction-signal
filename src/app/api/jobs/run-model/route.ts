@@ -5,10 +5,11 @@ import {
   getLatestSnapshot,
   getLatestExternalData,
   insertModelOutput,
+  type ExternalDataSnapshot,
 } from "@/lib/supabase/db";
 import { computeModeledProbability } from "@/lib/engine/probability";
 import { computeConfidenceScore } from "@/lib/engine/confidence";
-import { appConfig } from "@/lib/config";
+import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
@@ -16,31 +17,38 @@ export async function POST(req: Request) {
 
   try {
     const markets = await getActiveMarkets();
-    const externalData = await getLatestExternalData(appConfig.nicheKey, appConfig.cityKey);
 
-    if (!externalData) {
-      return NextResponse.json({ error: "No external data available" }, { status: 400 });
-    }
-
-    const normalized = externalData.normalized_json as Record<string, unknown>;
-    const forecastedHigh = normalized.forecasted_high as number;
-    const forecastTimestamp = normalized.forecast_timestamp as string;
-    const previousForecastHigh = normalized.previous_forecast_high as number | null;
-    const currentTemp = normalized.current_temp as number | null;
-    const leadTimeHours = normalized.lead_time_hours_to_forecast_local_noon;
-    const climatologyNormalHighF = normalized.climatology_normal_high_f;
-    const forecastAnomalyVsClimatologyF = normalized.forecast_anomaly_vs_climatology_f;
-
-    if (forecastedHigh == null || Number.isNaN(Number(forecastedHigh))) {
-      return NextResponse.json({ error: "normalized_json.forecasted_high is missing or invalid" }, { status: 400 });
+    const externalDataByCity = new Map<string, ExternalDataSnapshot>();
+    for (const cityKey of getAllCityKeys()) {
+      const data = await getLatestExternalData(sharedConfig.nicheKey, cityKey);
+      if (data) externalDataByCity.set(cityKey, data);
     }
 
     let modelsCreated = 0;
 
     for (const market of markets) {
       try {
+        const cityConfig = getCityConfig(market.city_key);
+        const externalData = externalDataByCity.get(market.city_key);
+
+        if (!externalData) {
+          console.warn(`run-model skip market ${market.ticker}: no external data for city ${market.city_key}`);
+          continue;
+        }
+
         const snapshot = await getLatestSnapshot(market.id);
         if (!snapshot) continue;
+
+        const normalized = externalData.normalized_json as Record<string, unknown>;
+        const forecastedHigh = normalized.forecasted_high as number;
+        const forecastTimestamp = normalized.forecast_timestamp as string;
+        const previousForecastHigh = normalized.previous_forecast_high as number | null;
+        const currentTemp = normalized.current_temp as number | null;
+        const leadTimeHours = normalized.lead_time_hours_to_forecast_local_noon;
+        const climatologyNormalHighF = normalized.climatology_normal_high_f;
+        const forecastAnomalyVsClimatologyF = normalized.forecast_anomaly_vs_climatology_f;
+
+        if (forecastedHigh == null || Number.isNaN(Number(forecastedHigh))) continue;
 
         const probResult = computeModeledProbability({
           forecastHigh: forecastedHigh,
@@ -49,7 +57,7 @@ export async function POST(req: Request) {
           thresholdDirection: market.threshold_direction,
           bucketLower: market.bucket_lower,
           bucketUpper: market.bucket_upper,
-          sigma: appConfig.sigma,
+          sigma: cityConfig.sigma,
         });
 
         const confidence = computeConfidenceScore({
@@ -59,8 +67,8 @@ export async function POST(req: Request) {
           previousForecastHigh,
           yesBid: snapshot.yes_bid,
           yesAsk: snapshot.yes_ask,
-          sigma: appConfig.sigma,
-        });
+          sigma: cityConfig.sigma,
+        }, sharedConfig.confidenceWeights);
 
         const featureJson = {
           forecasted_high: forecastedHigh,
@@ -79,7 +87,7 @@ export async function POST(req: Request) {
             Number.isFinite(forecastAnomalyVsClimatologyF)
               ? forecastAnomalyVsClimatologyF
               : null,
-          sigma: appConfig.sigma,
+          sigma: cityConfig.sigma,
           threshold: market.threshold_value,
           threshold_direction: market.threshold_direction,
           bucket_lower: market.bucket_lower,
@@ -97,7 +105,7 @@ export async function POST(req: Request) {
           modeled_probability: probResult.modeledYesProbability,
           confidence_score: confidence,
           feature_json: featureJson,
-          model_version: appConfig.modelVersion,
+          model_version: cityConfig.modelVersion,
           external_data_id: externalData.id,
         });
 

@@ -40,7 +40,7 @@ Respond with valid JSON:
   "reasonCodes": ["code1", "code2", ...]
 }`;
 
-export const POSTMORTEM_PROMPT = `You are a quantitative trade postmortem analyst for a prediction market signal engine focused on NYC weather temperature markets on Kalshi.
+export const POSTMORTEM_PROMPT = `You are a quantitative trade postmortem analyst for a prediction market signal engine focused on weather temperature markets on Kalshi.
 
 Your job is to diagnose WHY a trade won or lost and produce ACTIONABLE insights for tuning the signal engine. Do not merely narrate the outcome.
 

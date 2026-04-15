@@ -1,5 +1,16 @@
-import { appConfig } from "@/lib/config";
 import { minutesUntil } from "@/lib/utils/time";
+
+export interface TradingConfig {
+  slippagePenalty: number;
+  feePenalty: number;
+  uncertaintyBuffer: number;
+  minTradeEdge: number;
+  minConfidenceScore: number;
+  maxSpread: number;
+  maxMinutesBeforeSettlementToEnter: number;
+  highEntryThreshold: number;
+  highEntryMinEdge: number;
+}
 
 export type SignalAction = "BUY_YES" | "BUY_NO" | "NO_TRADE";
 
@@ -13,9 +24,10 @@ export interface TradeEdgeResult {
 export function computeTradeEdges(
   modeledYesProb: number,
   yesAsk: number,
-  noAsk: number
+  noAsk: number,
+  config: TradingConfig
 ): TradeEdgeResult {
-  const { slippagePenalty, feePenalty, uncertaintyBuffer } = appConfig;
+  const { slippagePenalty, feePenalty, uncertaintyBuffer } = config;
 
   const effectiveYesEntry = yesAsk + slippagePenalty + feePenalty + uncertaintyBuffer;
   const effectiveNoEntry = noAsk + slippagePenalty + feePenalty + uncertaintyBuffer;
@@ -39,7 +51,7 @@ export interface ActionSelectionParams {
   hasOpenTradeForMarket: boolean;
 }
 
-export function selectAction(params: ActionSelectionParams): SignalAction {
+export function selectAction(params: ActionSelectionParams, config: TradingConfig): SignalAction {
   const {
     tradeEdgeYes,
     tradeEdgeNo,
@@ -54,28 +66,28 @@ export function selectAction(params: ActionSelectionParams): SignalAction {
 
   if (hasOpenTradeForMarket) return "NO_TRADE";
 
-  if (confidenceScore < appConfig.minConfidenceScore) return "NO_TRADE";
+  if (confidenceScore < config.minConfidenceScore) return "NO_TRADE";
 
   const yesSpread = yesAsk - yesBid;
   const noSpread = noAsk - noBid;
-  if (yesSpread > appConfig.maxSpread && noSpread > appConfig.maxSpread) return "NO_TRADE";
+  if (yesSpread > config.maxSpread && noSpread > config.maxSpread) return "NO_TRADE";
 
   if (settlementTime) {
     const minutes = minutesUntil(settlementTime);
-    if (minutes < appConfig.maxMinutesBeforeSettlementToEnter) return "NO_TRADE";
+    if (minutes < config.maxMinutesBeforeSettlementToEnter) return "NO_TRADE";
   }
 
   const yesMinEdge =
-    yesAsk >= appConfig.highEntryThreshold
-      ? appConfig.highEntryMinEdge
-      : appConfig.minTradeEdge;
+    yesAsk >= config.highEntryThreshold
+      ? config.highEntryMinEdge
+      : config.minTradeEdge;
   const noMinEdge =
-    noAsk >= appConfig.highEntryThreshold
-      ? appConfig.highEntryMinEdge
-      : appConfig.minTradeEdge;
+    noAsk >= config.highEntryThreshold
+      ? config.highEntryMinEdge
+      : config.minTradeEdge;
 
-  const yesQualified = tradeEdgeYes >= yesMinEdge && yesSpread <= appConfig.maxSpread;
-  const noQualified = tradeEdgeNo >= noMinEdge && noSpread <= appConfig.maxSpread;
+  const yesQualified = tradeEdgeYes >= yesMinEdge && yesSpread <= config.maxSpread;
+  const noQualified = tradeEdgeNo >= noMinEdge && noSpread <= config.maxSpread;
 
   if (yesQualified && noQualified) {
     return tradeEdgeYes >= tradeEdgeNo ? "BUY_YES" : "BUY_NO";

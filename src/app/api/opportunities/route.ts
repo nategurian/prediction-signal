@@ -7,19 +7,24 @@ import {
   getLatestExternalData,
   getTradesForMarket,
   type Signal,
+  type ExternalDataSnapshot,
 } from "@/lib/supabase/db";
 import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
 import { computeModeledProbability } from "@/lib/engine/probability";
 import { computeConfidenceScore } from "@/lib/engine/confidence";
-import { appConfig } from "@/lib/config";
+import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function GET() {
   try {
     const markets = await getActiveMarkets();
     const signals = await getRecentSignals(200);
-    const externalData = await getLatestExternalData(appConfig.nicheKey, appConfig.cityKey);
 
-    // Signals are newest-first; keep first occurrence per market (newest for that market).
+    const externalDataByCity = new Map<string, ExternalDataSnapshot>();
+    for (const cityKey of getAllCityKeys()) {
+      const data = await getLatestExternalData(sharedConfig.nicheKey, cityKey);
+      if (data) externalDataByCity.set(cityKey, data);
+    }
+
     const signalsByMarket = new Map<string, Signal>();
     for (const s of signals) {
       if (!signalsByMarket.has(s.market_id)) {
@@ -42,6 +47,7 @@ export async function GET() {
               threshold_value: market.threshold_value,
               market_structure: market.market_structure,
               settlement_time: market.settlement_time,
+              city_key: market.city_key,
             },
             yes_ask: snapshot?.yes_ask ?? null,
             no_ask: snapshot?.no_ask ?? null,
@@ -59,6 +65,8 @@ export async function GET() {
         }
 
         const modelOutput = await getLatestModelOutput(market.id);
+        const cityConfig = getCityConfig(market.city_key);
+        const externalData = externalDataByCity.get(market.city_key);
 
         let modeledYesProb: number | null = null;
         let confidenceScore: number | null = null;
@@ -88,7 +96,7 @@ export async function GET() {
                 threshold: market.threshold_value,
                 bucketLower: market.bucket_lower,
                 bucketUpper: market.bucket_upper,
-                sigma: appConfig.sigma,
+                sigma: cityConfig.sigma,
               });
               confidenceScore = computeConfidenceScore({
                 forecastTimestamp,
@@ -97,8 +105,8 @@ export async function GET() {
                 previousForecastHigh,
                 yesBid: snapshot.yes_bid,
                 yesAsk: snapshot.yes_ask,
-                sigma: appConfig.sigma,
-              });
+                sigma: cityConfig.sigma,
+              }, sharedConfig.confidenceWeights);
               modeledYesProb = probResult.modeledYesProbability;
             } catch (err) {
               console.error(`GET /api/opportunities live model skip ${market.ticker}:`, err);
@@ -113,7 +121,7 @@ export async function GET() {
           modeledYesProb != null &&
           confidenceScore != null
         ) {
-          const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask);
+          const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask, cityConfig);
           const existingTrades = await getTradesForMarket(market.id);
           const action = selectAction({
             tradeEdgeYes: edges.tradeEdgeYes,
@@ -125,7 +133,7 @@ export async function GET() {
             noBid: snapshot.no_bid ?? 0,
             settlementTime: market.settlement_time,
             hasOpenTradeForMarket: existingTrades.length > 0,
-          });
+          }, cityConfig);
           const worthTrading = action !== "NO_TRADE";
 
           return {
@@ -137,6 +145,7 @@ export async function GET() {
               threshold_value: market.threshold_value,
               market_structure: market.market_structure,
               settlement_time: market.settlement_time,
+              city_key: market.city_key,
             },
             yes_ask: snapshot.yes_ask,
             no_ask: snapshot.no_ask,
@@ -162,6 +171,7 @@ export async function GET() {
             threshold_value: market.threshold_value,
             market_structure: market.market_structure,
             settlement_time: market.settlement_time,
+            city_key: market.city_key,
           },
           yes_ask: snapshot?.yes_ask ?? null,
           no_ask: snapshot?.no_ask ?? null,
