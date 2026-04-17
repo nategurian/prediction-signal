@@ -11,6 +11,7 @@ const defaultConfig: TradingConfig = {
   maxMinutesBeforeSettlementToEnter: 180,
   highEntryThreshold: 0.80,
   highEntryMinEdge: 0.10,
+  maxNoEntryPrice: 0.85,
 };
 
 describe("computeTradeEdges", () => {
@@ -206,6 +207,69 @@ describe("selectAction — high-entry edge guard", () => {
       noBid: 0.48,
     }, defaultConfig);
     expect(action).toBe("BUY_NO");
+  });
+});
+
+describe("selectAction — expensive NO leg cap (maxNoEntryPrice)", () => {
+  const baseParams = {
+    settlementTime: null,
+    hasOpenTradeForMarket: false,
+  };
+
+  it("NO at 88¢ with huge edge → NO_TRADE (entry exceeds maxNoEntryPrice cap)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: -0.20,
+      tradeEdgeNo: 0.15,
+      confidenceScore: 0.85,
+      yesAsk: 0.13,
+      yesBid: 0.11,
+      noAsk: 0.88,
+      noBid: 0.86,
+    }, defaultConfig);
+    expect(action).toBe("NO_TRADE");
+  });
+
+  it("NO exactly at 85¢ with 12% edge → BUY_NO (cap is strict >)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: -0.10,
+      tradeEdgeNo: 0.12,
+      confidenceScore: 0.8,
+      yesAsk: 0.17,
+      yesBid: 0.15,
+      noAsk: 0.85,
+      noBid: 0.83,
+    }, defaultConfig);
+    expect(action).toBe("BUY_NO");
+  });
+
+  it("NO at 90¢ even with 20% edge → NO_TRADE (cap binds before edge check)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: -0.25,
+      tradeEdgeNo: 0.20,
+      confidenceScore: 0.9,
+      yesAsk: 0.11,
+      yesBid: 0.09,
+      noAsk: 0.90,
+      noBid: 0.88,
+    }, defaultConfig);
+    expect(action).toBe("NO_TRADE");
+  });
+
+  it("NO too expensive but YES qualifies → BUY_YES (YES still considered)", () => {
+    const action = selectAction({
+      ...baseParams,
+      tradeEdgeYes: 0.08,
+      tradeEdgeNo: 0.15,
+      confidenceScore: 0.8,
+      yesAsk: 0.12,
+      yesBid: 0.10,
+      noAsk: 0.88,
+      noBid: 0.86,
+    }, defaultConfig);
+    expect(action).toBe("BUY_YES");
   });
 });
 

@@ -16,6 +16,12 @@ export interface CityConfig {
   fixedTradeQuantity: number;
   highEntryThreshold: number;
   highEntryMinEdge: number;
+  /**
+   * Hard cap on BUY_NO entry price. Trades with noAsk above this are forced
+   * to NO_TRADE regardless of modeled edge — guards against catastrophic
+   * losses on expensive NO legs when modeled P(YES) is miscalibrated low.
+   */
+  maxNoEntryPrice: number;
 }
 
 export type CityKey = "nyc" | "miami";
@@ -31,6 +37,7 @@ const SHARED_TRADING_DEFAULTS = {
   fixedTradeQuantity: 10,
   highEntryThreshold: 0.80,
   highEntryMinEdge: 0.10,
+  maxNoEntryPrice: 0.85,
 } as const;
 
 export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
@@ -39,8 +46,8 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     timezone: "America/New_York",
     seriesTicker: "KXHIGHNY",
     sigma: 3.5,
-    sigmaFloor: 1.5,
-    modelVersion: "weather_temp_v3",
+    sigmaFloor: 3.0,
+    modelVersion: "weather_temp_v4",
     ...SHARED_TRADING_DEFAULTS,
   },
   miami: {
@@ -48,8 +55,8 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     timezone: "America/New_York",
     seriesTicker: "KXHIGHMIA",
     sigma: 2.5,
-    sigmaFloor: 1.5,
-    modelVersion: "weather_temp_v3",
+    sigmaFloor: 2.5,
+    modelVersion: "weather_temp_v4",
     ...SHARED_TRADING_DEFAULTS,
   },
 };

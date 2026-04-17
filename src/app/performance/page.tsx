@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  ReferenceLine,
 } from "recharts";
 
 interface PerformanceData {
@@ -156,42 +157,80 @@ export default function PerformancePage() {
             No settled trades yet.
           </div>
         ) : (
-          <div className="min-w-0 w-full" style={{ height: chartHeight }}>
-            <ResponsiveContainer width="100%" height={chartHeight}>
-            <LineChart data={data.equityCurve} margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: "#71717a", fontSize: 10 }}
-                tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                interval="preserveStartEnd"
-                minTickGap={24}
-              />
-              <YAxis
-                width={44}
-                tick={{ fill: "#71717a", fontSize: 10 }}
-                tickFormatter={(v) => `$${v}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#18181b",
-                  border: "1px solid #27272a",
-                  borderRadius: "8px",
-                  fontSize: "12px",
-                }}
-                labelFormatter={(v) => new Date(v).toLocaleString()}
-                formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, "P&L"]}
-              />
-              <Line
-                type="monotone"
-                dataKey="pnl"
-                stroke="#34d399"
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-          </div>
+          (() => {
+            const GREEN = "#34d399";
+            const RED = "#f87171";
+            const values = data.equityCurve.map((p) => p.pnl);
+            const baseline = values[0];
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
+            // splitRatio: fraction (0..1) down the line's vertical bounding box
+            // where the baseline sits. 0 = baseline at top of line, 1 = at bottom.
+            // Above baseline → green; below → red.
+            let splitRatio: number;
+            if (maxVal === minVal) {
+              splitRatio = 1;
+            } else if (baseline >= maxVal) {
+              splitRatio = 0;
+            } else if (baseline <= minVal) {
+              splitRatio = 1;
+            } else {
+              splitRatio = (maxVal - baseline) / (maxVal - minVal);
+            }
+            return (
+              <div className="min-w-0 w-full" style={{ height: chartHeight }}>
+                <ResponsiveContainer width="100%" height={chartHeight}>
+                  <LineChart data={data.equityCurve} margin={{ left: 4, right: 8, top: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="equityGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset={0} stopColor={GREEN} />
+                        <stop offset={splitRatio} stopColor={GREEN} />
+                        <stop offset={splitRatio} stopColor={RED} />
+                        <stop offset={1} stopColor={RED} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: "#71717a", fontSize: 10 }}
+                      tickFormatter={(v) => new Date(v).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      interval="preserveStartEnd"
+                      minTickGap={24}
+                    />
+                    <YAxis
+                      width={44}
+                      tick={{ fill: "#71717a", fontSize: 10 }}
+                      tickFormatter={(v) => `$${v}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#18181b",
+                        border: "1px solid #27272a",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                      labelFormatter={(v) => new Date(v).toLocaleString()}
+                      formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, "P&L"]}
+                    />
+                    <ReferenceLine
+                      y={baseline}
+                      stroke="#52525b"
+                      strokeDasharray="2 4"
+                      ifOverflow="extendDomain"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="pnl"
+                      stroke="url(#equityGradient)"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })()
         )}
       </div>
 

@@ -10,6 +10,7 @@ export interface TradingConfig {
   maxMinutesBeforeSettlementToEnter: number;
   highEntryThreshold: number;
   highEntryMinEdge: number;
+  maxNoEntryPrice: number;
 }
 
 export type SignalAction = "BUY_YES" | "BUY_NO" | "NO_TRADE";
@@ -87,7 +88,9 @@ export function selectAction(params: ActionSelectionParams, config: TradingConfi
       : config.minTradeEdge;
 
   const yesQualified = tradeEdgeYes >= yesMinEdge && yesSpread <= config.maxSpread;
-  const noQualified = tradeEdgeNo >= noMinEdge && noSpread <= config.maxSpread;
+  const noEntryTooExpensive = noAsk > config.maxNoEntryPrice;
+  const noQualified =
+    tradeEdgeNo >= noMinEdge && noSpread <= config.maxSpread && !noEntryTooExpensive;
 
   if (yesQualified && noQualified) {
     return tradeEdgeYes >= tradeEdgeNo ? "BUY_YES" : "BUY_NO";
