@@ -1,3 +1,5 @@
+export type MarketStructure = "binary_threshold" | "bucket_range";
+
 export interface CityConfig {
   cityCoords: { latitude: number; longitude: number };
   timezone: string;
@@ -22,22 +24,44 @@ export interface CityConfig {
    * losses on expensive NO legs when modeled P(YES) is miscalibrated low.
    */
   maxNoEntryPrice: number;
+  /**
+   * Block YES signals when the modeled P(YES) is at or above this value.
+   * Empirically, when the model says YES is >=50% likely, YES wins only
+   * ~6% of the time (1/16 settled trades) — strong evidence of upside
+   * miscalibration on markets priced near the forecast threshold.
+   */
+  maxYesModeledProbability: number;
+  /**
+   * When true, BUY_YES signals are blocked on bucket_range markets.
+   * 1°F-wide bucket markets have observed 0/18 YES win rate — the Gaussian
+   * probability model cannot distinguish adjacent narrow buckets given
+   * realistic forecast-error sigma.
+   */
+  disableBucketRangeYes: boolean;
+  /**
+   * Market structures to disable entirely for this city. Use to turn off
+   * a structure whose empirical calibration is broken (e.g. Miami 1°F
+   * bucket markets at 1.7°F forecast-error SD).
+   */
+  disabledMarketStructures: readonly MarketStructure[];
 }
 
 export type CityKey = "nyc" | "miami";
 
 const SHARED_TRADING_DEFAULTS = {
-  minTradeEdge: 0.05,
-  minConfidenceScore: 0.6,
+  minTradeEdge: 0.08,
+  minConfidenceScore: 0.8,
   maxSpread: 0.06,
   slippagePenalty: 0.01,
   feePenalty: 0.0,
   uncertaintyBuffer: 0.02,
   maxMinutesBeforeSettlementToEnter: 180,
   fixedTradeQuantity: 10,
-  highEntryThreshold: 0.80,
+  highEntryThreshold: 0.75,
   highEntryMinEdge: 0.10,
-  maxNoEntryPrice: 0.85,
+  maxNoEntryPrice: 0.75,
+  maxYesModeledProbability: 0.50,
+  disableBucketRangeYes: true,
 } as const;
 
 export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
@@ -47,8 +71,9 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     seriesTicker: "KXHIGHNY",
     sigma: 3.5,
     sigmaFloor: 3.0,
-    modelVersion: "weather_temp_v4",
+    modelVersion: "weather_temp_v5",
     ...SHARED_TRADING_DEFAULTS,
+    disabledMarketStructures: [],
   },
   miami: {
     cityCoords: { latitude: 25.7617, longitude: -80.1918 },
@@ -56,8 +81,9 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     seriesTicker: "KXHIGHMIA",
     sigma: 2.5,
     sigmaFloor: 2.5,
-    modelVersion: "weather_temp_v4",
+    modelVersion: "weather_temp_v5",
     ...SHARED_TRADING_DEFAULTS,
+    disabledMarketStructures: ["bucket_range"],
   },
 };
 

@@ -1,4 +1,5 @@
 import { minutesUntil } from "@/lib/utils/time";
+import type { MarketStructure } from "@/lib/config";
 
 export interface TradingConfig {
   slippagePenalty: number;
@@ -11,6 +12,9 @@ export interface TradingConfig {
   highEntryThreshold: number;
   highEntryMinEdge: number;
   maxNoEntryPrice: number;
+  maxYesModeledProbability: number;
+  disableBucketRangeYes: boolean;
+  disabledMarketStructures: readonly MarketStructure[];
 }
 
 export type SignalAction = "BUY_YES" | "BUY_NO" | "NO_TRADE";
@@ -50,6 +54,8 @@ export interface ActionSelectionParams {
   noBid: number;
   settlementTime: string | null;
   hasOpenTradeForMarket: boolean;
+  marketStructure: MarketStructure;
+  modeledYesProbability: number;
 }
 
 export function selectAction(params: ActionSelectionParams, config: TradingConfig): SignalAction {
@@ -63,9 +69,13 @@ export function selectAction(params: ActionSelectionParams, config: TradingConfi
     noBid,
     settlementTime,
     hasOpenTradeForMarket,
+    marketStructure,
+    modeledYesProbability,
   } = params;
 
   if (hasOpenTradeForMarket) return "NO_TRADE";
+
+  if (config.disabledMarketStructures.includes(marketStructure)) return "NO_TRADE";
 
   if (confidenceScore < config.minConfidenceScore) return "NO_TRADE";
 
@@ -87,7 +97,21 @@ export function selectAction(params: ActionSelectionParams, config: TradingConfi
       ? config.highEntryMinEdge
       : config.minTradeEdge;
 
-  const yesQualified = tradeEdgeYes >= yesMinEdge && yesSpread <= config.maxSpread;
+  // YES-side structural gates (data-driven, Apr 2026 audit):
+  //   1) bucket_range YES has observed 0/18 win rate across all sampled trades.
+  //   2) binary_threshold YES with modeled pYes >= 0.5 has 1/16 wins —
+  //      model overestimates near-certain YES outcomes. Only "cheap longshot"
+  //      YES bets (modeled pYes in ~0.1-0.3, entered <10c) have been profitable.
+  const bucketYesBlocked =
+    marketStructure === "bucket_range" && config.disableBucketRangeYes;
+  const yesModeledTooHigh = modeledYesProbability >= config.maxYesModeledProbability;
+  const yesStructurallyBlocked = bucketYesBlocked || yesModeledTooHigh;
+
+  const yesQualified =
+    !yesStructurallyBlocked &&
+    tradeEdgeYes >= yesMinEdge &&
+    yesSpread <= config.maxSpread;
+
   const noEntryTooExpensive = noAsk > config.maxNoEntryPrice;
   const noQualified =
     tradeEdgeNo >= noMinEdge && noSpread <= config.maxSpread && !noEntryTooExpensive;

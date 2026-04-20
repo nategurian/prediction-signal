@@ -67,6 +67,8 @@ export async function POST(req: Request) {
         noBid: snapshot.no_bid ?? 0,
         settlementTime: market.settlement_time,
         hasOpenTradeForMarket: hasOpenTrade,
+        marketStructure: market.market_structure,
+        modeledYesProbability: modeledYesProb,
       }, cityConfig);
 
       const worthTrading = action !== "NO_TRADE";

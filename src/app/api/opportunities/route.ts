@@ -146,6 +146,8 @@ export async function GET() {
             noBid: snapshot.no_bid ?? 0,
             settlementTime: market.settlement_time,
             hasOpenTradeForMarket: existingTrades.length > 0,
+            marketStructure: market.market_structure,
+            modeledYesProbability: modeledYesProb,
           }, cityConfig);
           const worthTrading = action !== "NO_TRADE";
 
