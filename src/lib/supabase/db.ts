@@ -349,11 +349,28 @@ export async function getAllTrades(limit = 100): Promise<SimulatedTrade[]> {
   return (data ?? []) as SimulatedTrade[];
 }
 
-/** Trade row with joined market schedule fields for dashboards. */
+/** Trade row with joined market + signal fields for dashboards. */
 export type SimulatedTradeWithMarket = SimulatedTrade & {
   markets: Pick<
     Market,
-    "ticker" | "title" | "market_date" | "close_time" | "settlement_time" | "raw_json"
+    | "ticker"
+    | "title"
+    | "market_date"
+    | "close_time"
+    | "settlement_time"
+    | "raw_json"
+    | "city_key"
+    | "market_structure"
+    | "threshold_direction"
+  > | null;
+  signals: Pick<
+    Signal,
+    | "model_version"
+    | "signal_type"
+    | "modeled_yes_probability"
+    | "confidence_score"
+    | "trade_edge_yes"
+    | "trade_edge_no"
   > | null;
 };
 
@@ -369,7 +386,18 @@ export async function getAllTradesWithMarkets(limit = 100): Promise<SimulatedTra
         market_date,
         close_time,
         settlement_time,
-        raw_json
+        raw_json,
+        city_key,
+        market_structure,
+        threshold_direction
+      ),
+      signals (
+        model_version,
+        signal_type,
+        modeled_yes_probability,
+        confidence_score,
+        trade_edge_yes,
+        trade_edge_no
       )
     `
     )

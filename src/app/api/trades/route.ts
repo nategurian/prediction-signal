@@ -14,6 +14,7 @@ function openTimeFromMarketRaw(raw: Record<string, unknown> | null): string | nu
 
 function serializeTrade(row: SimulatedTradeWithMarket) {
   const m = row.markets;
+  const s = row.signals;
   const openTime = m ? openTimeFromMarketRaw(m.raw_json) : null;
   return {
     id: row.id,
@@ -39,6 +40,19 @@ function serializeTrade(row: SimulatedTradeWithMarket) {
           open_time: openTime,
           close_time: m.close_time,
           settlement_time: m.settlement_time,
+          city_key: m.city_key,
+          market_structure: m.market_structure,
+          threshold_direction: m.threshold_direction,
+        }
+      : null,
+    signal: s
+      ? {
+          model_version: s.model_version,
+          signal_type: s.signal_type,
+          modeled_yes_probability: s.modeled_yes_probability,
+          confidence_score: s.confidence_score,
+          trade_edge_yes: s.trade_edge_yes,
+          trade_edge_no: s.trade_edge_no,
         }
       : null,
   };

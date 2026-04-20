@@ -98,6 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <NavLink href="/opportunities">Opportunities</NavLink>
         <NavLink href="/trades">Trades</NavLink>
         <NavLink href="/performance">Performance</NavLink>
+        <NavLink href="/models">Models</NavLink>
       </aside>
 
       {mobileOpen && (
@@ -121,6 +122,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </NavLink>
             <NavLink href="/performance" onNavigate={closeNav}>
               Performance
+            </NavLink>
+            <NavLink href="/models" onNavigate={closeNav}>
+              Models
             </NavLink>
           </aside>
         </>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { unstable_noStore as noStore } from "next/cache";
 import { getAllTrades, getDefaultAccount } from "@/lib/supabase/db";
+import { getModelTransitions } from "@/lib/models/changelog";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,14 @@ export async function GET(request: Request) {
       if (drawdown > maxDrawdown) maxDrawdown = drawdown;
     }
 
+    const modelTransitions = getModelTransitions().map((m) => ({
+      version: m.version,
+      slug: m.slug,
+      deployedAt: m.deployedAt,
+      title: m.title,
+      category: m.category,
+    }));
+
     return NextResponse.json(
       {
         totalPnl: Math.round(totalPnl * 100) / 100,
@@ -61,6 +70,7 @@ export async function GET(request: Request) {
         avgLoss: Math.round(avgLoss * 100) / 100,
         maxDrawdown: Math.round(maxDrawdown * 100) / 100,
         equityCurve,
+        modelTransitions,
         account: {
           startingBalance: account.starting_balance,
           currentBalance: account.current_balance,
