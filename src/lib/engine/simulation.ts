@@ -11,6 +11,7 @@ import {
   type Market,
 } from "@/lib/supabase/db";
 import { getCityConfig } from "@/lib/config";
+import { kalshiTradingFee } from "@/lib/engine/fees";
 
 export async function openPaperTrade(
   signal: Signal,
@@ -29,14 +30,20 @@ export async function openPaperTrade(
   if (askPrice == null) return null;
 
   const cityConfig = getCityConfig(market.city_key);
-  const entryPrice = askPrice + cityConfig.slippagePenalty;
+  // Fold Kalshi's per-contract trading fee into the effective entry price
+  // so realized PnL correctly reflects the fee haircut. The fee is batched
+  // (cent-rounded once per order) so we divide by quantity to amortize it
+  // evenly across contracts.
+  const quantity = cityConfig.fixedTradeQuantity;
+  const feePerContract = kalshiTradingFee(askPrice, quantity) / quantity;
+  const entryPrice = askPrice + cityConfig.slippagePenalty + feePerContract;
 
   return insertSimulatedTrade({
     account_id: account.id,
     market_id: market.id,
     signal_id: signal.id,
     side,
-    quantity: cityConfig.fixedTradeQuantity,
+    quantity,
     entry_time: new Date().toISOString(),
     entry_price: entryPrice,
     current_mark_price: askPrice,

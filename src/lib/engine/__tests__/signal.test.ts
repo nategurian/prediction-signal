@@ -3,7 +3,6 @@ import { computeTradeEdges, selectAction, type TradingConfig } from "../signal";
 
 const defaultConfig: TradingConfig = {
   slippagePenalty: 0.01,
-  feePenalty: 0.0,
   uncertaintyBuffer: 0.02,
   minTradeEdge: 0.08,
   minConfidenceScore: 0.8,
@@ -31,11 +30,13 @@ const baseSelectionParams = {
 
 describe("computeTradeEdges", () => {
   it("computes effective entry and edge correctly", () => {
+    // At yesAsk=0.58 the expected per-contract fee is 0.07×0.58×0.42 ≈ 1.7¢,
+    // so effectiveYesEntry ≈ 0.58 + 0.01 (slip) + 0.017 (fee) + 0.02 (unc) ≈ 0.627.
     const result = computeTradeEdges(0.7, 0.58, 0.38, defaultConfig);
-    expect(result.effectiveYesEntry).toBeCloseTo(0.61, 2);
-    expect(result.effectiveNoEntry).toBeCloseTo(0.41, 2);
-    expect(result.tradeEdgeYes).toBeCloseTo(0.09, 2);
-    expect(result.tradeEdgeNo).toBeCloseTo(-0.11, 2);
+    expect(result.effectiveYesEntry).toBeCloseTo(0.63, 2);
+    expect(result.effectiveNoEntry).toBeCloseTo(0.43, 2);
+    expect(result.tradeEdgeYes).toBeCloseTo(0.07, 2);
+    expect(result.tradeEdgeNo).toBeCloseTo(-0.13, 2);
   });
 
   it("high probability thin edge", () => {

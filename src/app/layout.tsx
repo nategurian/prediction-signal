@@ -5,9 +5,9 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Prediction Signals — AI-powered alpha for prediction markets",
-  description:
-    "Institutional-grade prediction market signals, powered by AI and driven by real data. Delivered via REST API and webhooks.",
+  title: "Prediction Signals",
+  description: "Internal dashboard for prediction-market signal research.",
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {

@@ -1,9 +1,9 @@
 import { minutesUntil } from "@/lib/utils/time";
 import type { MarketStructure } from "@/lib/config";
+import { expectedFeePerContract } from "@/lib/engine/fees";
 
 export interface TradingConfig {
   slippagePenalty: number;
-  feePenalty: number;
   uncertaintyBuffer: number;
   minTradeEdge: number;
   minConfidenceScore: number;
@@ -40,10 +40,17 @@ export function computeTradeEdges(
   noAsk: number,
   config: TradingConfig
 ): TradeEdgeResult {
-  const { slippagePenalty, feePenalty, uncertaintyBuffer } = config;
+  const { slippagePenalty, uncertaintyBuffer } = config;
 
-  const effectiveYesEntry = yesAsk + slippagePenalty + feePenalty + uncertaintyBuffer;
-  const effectiveNoEntry = noAsk + slippagePenalty + feePenalty + uncertaintyBuffer;
+  // Kalshi fees are price-dependent (peak at P=0.5, zero at the tails). We
+  // use the unrounded per-contract estimate when deciding whether an edge
+  // clears `minTradeEdge`; the cent-rounded batched fee is applied at
+  // actual trade-open time in the simulation layer.
+  const yesFee = expectedFeePerContract(yesAsk);
+  const noFee = expectedFeePerContract(noAsk);
+
+  const effectiveYesEntry = yesAsk + slippagePenalty + yesFee + uncertaintyBuffer;
+  const effectiveNoEntry = noAsk + slippagePenalty + noFee + uncertaintyBuffer;
 
   const tradeEdgeYes = modeledYesProb - effectiveYesEntry;
   const modeledNoProb = 1 - modeledYesProb;

@@ -29,7 +29,6 @@ export interface CityConfig {
   minConfidenceScore: number;
   maxSpread: number;
   slippagePenalty: number;
-  feePenalty: number;
   uncertaintyBuffer: number;
   maxMinutesBeforeSettlementToEnter: number;
   fixedTradeQuantity: number;
@@ -76,8 +75,10 @@ const SHARED_TRADING_DEFAULTS = {
   minTradeEdge: 0.08,
   minConfidenceScore: 0.8,
   maxSpread: 0.06,
-  slippagePenalty: 0.01,
-  feePenalty: 0.0,
+  // Bumped from 1¢ to 2¢ (Apr 2026): the prior value under-modeled both
+  // bid-ask crossing and adverse selection near settlement. Kalshi trading
+  // fees are now modeled separately and dynamically in `fees.ts`.
+  slippagePenalty: 0.02,
   uncertaintyBuffer: 0.02,
   maxMinutesBeforeSettlementToEnter: 180,
   // Held at 10 intentionally. The Apr-2026 audit introduced three new

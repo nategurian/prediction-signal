@@ -92,14 +92,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <aside className="hidden w-56 shrink-0 flex-col gap-1 border-r border-zinc-800 bg-zinc-900 p-4 md:flex">
-        <Link href="/" className="mb-1 px-4 text-lg font-bold text-white">
+        <Link href="/" className="mb-5 px-4 text-lg font-bold text-white">
           Prediction Signals
-        </Link>
-        <Link
-          href="/"
-          className="mb-5 px-4 text-xs text-zinc-500 hover:text-zinc-300"
-        >
-          ← Back to site
         </Link>
         <NavLink href="/opportunities">Opportunities</NavLink>
         <NavLink href="/trades">Trades</NavLink>
