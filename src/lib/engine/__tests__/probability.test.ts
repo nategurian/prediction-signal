@@ -85,11 +85,12 @@ describe("computeBucketProbability", () => {
 });
 
 describe("computeModeledProbability", () => {
-  it("binary threshold market (greater, default)", () => {
+  it("binary threshold market (greater)", () => {
     const result = computeModeledProbability({
       forecastHigh: 80,
       marketStructure: "binary_threshold",
       threshold: 75,
+      thresholdDirection: "greater",
       sigma: 2.5,
     });
     expect(result.modeledYesProbability).toBeGreaterThan(0.95);
@@ -148,6 +149,17 @@ describe("computeModeledProbability", () => {
         sigma: 2.5,
       })
     ).toThrow("threshold required");
+  });
+
+  it("throws for binary_threshold without thresholdDirection (guards polarity bug)", () => {
+    expect(() =>
+      computeModeledProbability({
+        forecastHigh: 82.9,
+        marketStructure: "binary_threshold",
+        threshold: 79,
+        sigma: 2.5,
+      })
+    ).toThrow("thresholdDirection required");
   });
 
   it("throws for bucket without bounds", () => {

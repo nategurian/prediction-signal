@@ -15,6 +15,7 @@ const defaultConfig: TradingConfig = {
   maxYesModeledProbability: 0.50,
   disableBucketRangeYes: true,
   disabledMarketStructures: [],
+  minBucketWidthSigmaRatio: 1.5,
 };
 
 const baseSelectionParams = {
@@ -442,5 +443,83 @@ describe("selectAction — disabledMarketStructures (per-city)", () => {
       marketStructure: "binary_threshold",
     }, defaultConfig);
     expect(action).toBe("BUY_YES");
+  });
+});
+
+describe("selectAction — bucket width / σ ratio gate", () => {
+  const bucketWide = {
+    tradeEdgeYes: -0.20,
+    tradeEdgeNo: 0.12,
+    confidenceScore: 0.85,
+    yesAsk: 0.25,
+    yesBid: 0.23,
+    noAsk: 0.73,
+    noBid: 0.71,
+    modeledYesProbability: 0.10,
+    marketStructure: "bucket_range" as const,
+  };
+
+  it("1°F bucket against σ=3.5 → ratio 0.29 < 1.5 → NO_TRADE (both sides)", () => {
+    const action = selectAction(
+      {
+        ...baseSelectionParams,
+        ...bucketWide,
+        bucketWidth: 1,
+        effectiveSigma: 3.5,
+      },
+      { ...defaultConfig, disableBucketRangeYes: false }
+    );
+    expect(action).toBe("NO_TRADE");
+  });
+
+  it("6°F bucket against σ=3.5 → ratio 1.71 > 1.5 → trade passes", () => {
+    const action = selectAction(
+      {
+        ...baseSelectionParams,
+        ...bucketWide,
+        bucketWidth: 6,
+        effectiveSigma: 3.5,
+      },
+      { ...defaultConfig, disableBucketRangeYes: false }
+    );
+    expect(action).toBe("BUY_NO");
+  });
+
+  it("gate is disabled when minBucketWidthSigmaRatio = 0", () => {
+    const action = selectAction(
+      {
+        ...baseSelectionParams,
+        ...bucketWide,
+        bucketWidth: 1,
+        effectiveSigma: 3.5,
+      },
+      { ...defaultConfig, minBucketWidthSigmaRatio: 0, disableBucketRangeYes: false }
+    );
+    expect(action).toBe("BUY_NO");
+  });
+
+  it("missing bucketWidth or effectiveSigma does not trigger the gate", () => {
+    const action = selectAction(
+      {
+        ...baseSelectionParams,
+        ...bucketWide,
+      },
+      { ...defaultConfig, disableBucketRangeYes: false }
+    );
+    expect(action).toBe("BUY_NO");
+  });
+
+  it("gate does not apply to binary_threshold markets", () => {
+    const action = selectAction(
+      {
+        ...baseSelectionParams,
+        ...bucketWide,
+        marketStructure: "binary_threshold",
+        bucketWidth: 1,
+        effectiveSigma: 3.5,
+      },
+      defaultConfig
+    );
+    expect(action).toBe("BUY_NO");
   });
 });

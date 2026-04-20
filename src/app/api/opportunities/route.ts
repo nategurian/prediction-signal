@@ -7,13 +7,16 @@ import {
   getRecentSignals,
   getLatestModelOutput,
   getLatestExternalData,
+  getAllCityCalibrations,
   getTradesForMarket,
+  type CityCalibration,
   type Signal,
   type ExternalDataSnapshot,
 } from "@/lib/supabase/db";
 import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
 import { computeModeledProbability } from "@/lib/engine/probability";
 import { computeConfidenceScore } from "@/lib/engine/confidence";
+import { resolveEffectiveSigma } from "@/lib/engine/calibration";
 import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function GET() {
@@ -26,6 +29,10 @@ export async function GET() {
       const data = await getLatestExternalData(sharedConfig.nicheKey, cityKey);
       if (data) externalDataByCity.set(cityKey, data);
     }
+
+    const calibrations = await getAllCityCalibrations();
+    const calibrationByCity = new Map<string, CityCalibration>();
+    for (const c of calibrations) calibrationByCity.set(c.city_key, c);
 
     const signalsByMarket = new Map<string, Signal>();
     for (const s of signals) {
@@ -72,10 +79,13 @@ export async function GET() {
 
         let modeledYesProb: number | null = null;
         let confidenceScore: number | null = null;
+        let effectiveSigma: number | null = null;
 
         if (modelOutput) {
           modeledYesProb = modelOutput.modeled_probability;
           confidenceScore = modelOutput.confidence_score;
+          const featureJson = (modelOutput.feature_json ?? {}) as Record<string, unknown>;
+          if (typeof featureJson.sigma === "number") effectiveSigma = featureJson.sigma;
         } else if (externalData && snapshot) {
           const normalized = externalData.normalized_json as Record<string, unknown>;
           const forecastedHigh = normalized.forecasted_high as number;
@@ -85,16 +95,27 @@ export async function GET() {
           const ensembleAvailable = normalized.ensemble_available === true;
           const ensembleSigmaUsed = normalized.ensemble_sigma_used;
 
-          const effectiveSigma =
+          const ensembleSigmaCandidate =
             ensembleAvailable &&
             typeof ensembleSigmaUsed === "number" &&
             Number.isFinite(ensembleSigmaUsed)
               ? ensembleSigmaUsed
-              : cityConfig.sigma;
+              : null;
+
+          const calibration = calibrationByCity.get(market.city_key) ?? null;
+          const resolved = resolveEffectiveSigma({
+            calibration,
+            ensembleSigma: ensembleSigmaCandidate,
+            staticSigma: cityConfig.sigma,
+            minCalibrationSamples: cityConfig.minCalibrationSamples,
+            sigmaFloor: cityConfig.sigmaFloor,
+            sigmaCeiling: cityConfig.sigmaCeiling,
+          });
+          effectiveSigma = resolved.sigma;
 
           const canModel =
             market.market_structure === "binary_threshold"
-              ? market.threshold_value != null
+              ? market.threshold_value != null && market.threshold_direction != null
               : market.bucket_lower != null && market.bucket_upper != null;
           if (
             canModel &&
@@ -107,6 +128,7 @@ export async function GET() {
                 forecastHigh: forecastedHigh,
                 marketStructure: market.market_structure,
                 threshold: market.threshold_value,
+                thresholdDirection: market.threshold_direction,
                 bucketLower: market.bucket_lower,
                 bucketUpper: market.bucket_upper,
                 sigma: effectiveSigma,
@@ -136,6 +158,11 @@ export async function GET() {
         ) {
           const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask, cityConfig);
           const existingTrades = await getTradesForMarket(market.id);
+          const bucketWidth =
+            market.bucket_upper != null && market.bucket_lower != null
+              ? market.bucket_upper - market.bucket_lower
+              : null;
+
           const action = selectAction({
             tradeEdgeYes: edges.tradeEdgeYes,
             tradeEdgeNo: edges.tradeEdgeNo,
@@ -148,6 +175,8 @@ export async function GET() {
             hasOpenTradeForMarket: existingTrades.length > 0,
             marketStructure: market.market_structure,
             modeledYesProbability: modeledYesProb,
+            bucketWidth,
+            effectiveSigma: effectiveSigma ?? null,
           }, cityConfig);
           const worthTrading = action !== "NO_TRADE";
 

@@ -15,6 +15,14 @@ export interface TradingConfig {
   maxYesModeledProbability: number;
   disableBucketRangeYes: boolean;
   disabledMarketStructures: readonly MarketStructure[];
+  /**
+   * Minimum ratio of bucket_width to effective σ below which the model cannot
+   * meaningfully discriminate adjacent buckets. Any bucket market violating
+   * this is forced to NO_TRADE, on either side. Typical NYC σ≈3.5°F against
+   * a 1°F bucket gives ratio≈0.29, which should be below any reasonable
+   * threshold. Set to 0 to disable the gate.
+   */
+  minBucketWidthSigmaRatio: number;
 }
 
 export type SignalAction = "BUY_YES" | "BUY_NO" | "NO_TRADE";
@@ -56,6 +64,10 @@ export interface ActionSelectionParams {
   hasOpenTradeForMarket: boolean;
   marketStructure: MarketStructure;
   modeledYesProbability: number;
+  /** Required for bucket_range markets when minBucketWidthSigmaRatio > 0. */
+  bucketWidth?: number | null;
+  /** Effective σ used when computing modeled probability. */
+  effectiveSigma?: number | null;
 }
 
 export function selectAction(params: ActionSelectionParams, config: TradingConfig): SignalAction {
@@ -71,11 +83,27 @@ export function selectAction(params: ActionSelectionParams, config: TradingConfi
     hasOpenTradeForMarket,
     marketStructure,
     modeledYesProbability,
+    bucketWidth,
+    effectiveSigma,
   } = params;
 
   if (hasOpenTradeForMarket) return "NO_TRADE";
 
   if (config.disabledMarketStructures.includes(marketStructure)) return "NO_TRADE";
+
+  // Bucket-width/σ gate: narrow buckets relative to forecast uncertainty are
+  // uninvestable — the Gaussian cannot meaningfully discriminate adjacent
+  // buckets, so both modeled P(YES) and modeled P(NO) are essentially noise.
+  if (
+    marketStructure === "bucket_range" &&
+    config.minBucketWidthSigmaRatio > 0 &&
+    bucketWidth != null &&
+    effectiveSigma != null &&
+    effectiveSigma > 0 &&
+    bucketWidth / effectiveSigma < config.minBucketWidthSigmaRatio
+  ) {
+    return "NO_TRADE";
+  }
 
   if (confidenceScore < config.minConfidenceScore) return "NO_TRADE";
 

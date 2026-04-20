@@ -6,6 +6,23 @@ export interface CityConfig {
   seriesTicker: string;
   sigma: number;
   sigmaFloor: number;
+  /**
+   * Upper bound applied after sigma resolution. Prevents a single catastrophic
+   * forecast bust from inflating empirical σ to a level where nothing passes
+   * minTradeEdge. Tuned to ~2x static sigma.
+   */
+  sigmaCeiling: number;
+  /**
+   * Minimum number of settled postmortems with actual vs. forecasted high
+   * required before we'll use the empirical calibration σ instead of the
+   * ensemble or static fallback.
+   */
+  minCalibrationSamples: number;
+  /**
+   * Trailing window (in days) used by `recalibrate-sigma` to compute
+   * forecast-error stats. Longer windows are more stable but slower to adapt.
+   */
+  calibrationWindowDays: number;
   modelVersion: string;
 
   minTradeEdge: number;
@@ -44,6 +61,13 @@ export interface CityConfig {
    * bucket markets at 1.7°F forecast-error SD).
    */
   disabledMarketStructures: readonly MarketStructure[];
+  /**
+   * Minimum ratio of bucket_width / effective σ required to trade a bucket
+   * market. See signal.ts for the full rationale. 1.5 means a 1°F bucket
+   * needs σ ≤ 0.67°F — essentially impossible for daily-high forecasts, so
+   * all 1°F bucket markets are gated out.
+   */
+  minBucketWidthSigmaRatio: number;
 }
 
 export type CityKey = "nyc" | "miami";
@@ -56,12 +80,17 @@ const SHARED_TRADING_DEFAULTS = {
   feePenalty: 0.0,
   uncertaintyBuffer: 0.02,
   maxMinutesBeforeSettlementToEnter: 180,
+  // Held at 10 intentionally. The Apr-2026 audit introduced three new
+  // filters (stricter thresholds, bucket/YES gate, width/σ gate) and
+  // empirical σ calibration. Bump only after ≥20 settled trades under
+  // the new regime show positive win rate and realized edge.
   fixedTradeQuantity: 10,
   highEntryThreshold: 0.75,
   highEntryMinEdge: 0.10,
   maxNoEntryPrice: 0.75,
   maxYesModeledProbability: 0.50,
   disableBucketRangeYes: true,
+  minBucketWidthSigmaRatio: 1.5,
 } as const;
 
 export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
@@ -71,7 +100,10 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     seriesTicker: "KXHIGHNY",
     sigma: 3.5,
     sigmaFloor: 3.0,
-    modelVersion: "weather_temp_v5",
+    sigmaCeiling: 7.0,
+    minCalibrationSamples: 10,
+    calibrationWindowDays: 30,
+    modelVersion: "weather_temp_v6",
     ...SHARED_TRADING_DEFAULTS,
     disabledMarketStructures: [],
   },
@@ -81,7 +113,10 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     seriesTicker: "KXHIGHMIA",
     sigma: 2.5,
     sigmaFloor: 2.5,
-    modelVersion: "weather_temp_v5",
+    sigmaCeiling: 5.0,
+    minCalibrationSamples: 10,
+    calibrationWindowDays: 30,
+    modelVersion: "weather_temp_v6",
     ...SHARED_TRADING_DEFAULTS,
     disabledMarketStructures: ["bucket_range"],
   },

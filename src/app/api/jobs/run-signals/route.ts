@@ -57,6 +57,13 @@ export async function POST(req: Request) {
       const existingTrades = await getTradesForMarket(market.id);
       const hasOpenTrade = existingTrades.length > 0;
 
+      const featureJson = (modelOutput.feature_json ?? {}) as Record<string, unknown>;
+      const effectiveSigma = typeof featureJson.sigma === "number" ? featureJson.sigma : null;
+      const bucketWidth =
+        market.bucket_upper != null && market.bucket_lower != null
+          ? market.bucket_upper - market.bucket_lower
+          : null;
+
       const action = selectAction({
         tradeEdgeYes: edges.tradeEdgeYes,
         tradeEdgeNo: edges.tradeEdgeNo,
@@ -69,6 +76,8 @@ export async function POST(req: Request) {
         hasOpenTradeForMarket: hasOpenTrade,
         marketStructure: market.market_structure,
         modeledYesProbability: modeledYesProb,
+        bucketWidth,
+        effectiveSigma,
       }, cityConfig);
 
       const worthTrading = action !== "NO_TRADE";

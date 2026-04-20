@@ -4,11 +4,14 @@ import {
   getActiveMarkets,
   getLatestSnapshot,
   getLatestExternalData,
+  getAllCityCalibrations,
   insertModelOutput,
+  type CityCalibration,
   type ExternalDataSnapshot,
 } from "@/lib/supabase/db";
 import { computeModeledProbability } from "@/lib/engine/probability";
 import { computeConfidenceScore } from "@/lib/engine/confidence";
+import { resolveEffectiveSigma } from "@/lib/engine/calibration";
 import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function POST(req: Request) {
@@ -23,6 +26,10 @@ export async function POST(req: Request) {
       const data = await getLatestExternalData(sharedConfig.nicheKey, cityKey);
       if (data) externalDataByCity.set(cityKey, data);
     }
+
+    const calibrations = await getAllCityCalibrations();
+    const calibrationByCity = new Map<string, CityCalibration>();
+    for (const c of calibrations) calibrationByCity.set(c.city_key, c);
 
     let modelsCreated = 0;
 
@@ -56,18 +63,24 @@ export async function POST(req: Request) {
         const ensembleMean = normalized.ensemble_mean;
         const ensembleMemberCount = normalized.ensemble_member_count;
 
-        const effectiveSigma =
+        const ensembleSigmaCandidate =
           ensembleAvailable &&
           typeof ensembleSigmaUsed === "number" &&
           Number.isFinite(ensembleSigmaUsed)
             ? ensembleSigmaUsed
-            : cityConfig.sigma;
+            : null;
 
-        const sigmaSource = ensembleAvailable &&
-          typeof ensembleSigmaUsed === "number" &&
-          Number.isFinite(ensembleSigmaUsed)
-            ? "ensemble" as const
-            : "static_fallback" as const;
+        const calibration = calibrationByCity.get(market.city_key) ?? null;
+        const resolved = resolveEffectiveSigma({
+          calibration,
+          ensembleSigma: ensembleSigmaCandidate,
+          staticSigma: cityConfig.sigma,
+          minCalibrationSamples: cityConfig.minCalibrationSamples,
+          sigmaFloor: cityConfig.sigmaFloor,
+          sigmaCeiling: cityConfig.sigmaCeiling,
+        });
+        const effectiveSigma = resolved.sigma;
+        const sigmaSource = resolved.source;
 
         const probResult = computeModeledProbability({
           forecastHigh: forecastedHigh,
@@ -108,6 +121,10 @@ export async function POST(req: Request) {
               : null,
           sigma: effectiveSigma,
           sigma_source: sigmaSource,
+          sigma_raw: resolved.rawSigma,
+          sigma_clamped: resolved.clamped,
+          calibration_sample_count: calibration?.sample_count ?? null,
+          calibration_rmse: calibration?.forecast_error_rmse ?? null,
           ensemble_stdev:
             typeof ensembleStdev === "number" && Number.isFinite(ensembleStdev)
               ? ensembleStdev

@@ -56,8 +56,18 @@ export function computeModeledProbability(params: {
 
   if (params.marketStructure === "binary_threshold") {
     if (params.threshold == null) throw new Error("threshold required for binary market");
-    const direction = params.thresholdDirection ?? "greater";
-    pYes = computeBinaryProbability(params.forecastHigh, params.threshold, params.sigma, direction);
+    if (params.thresholdDirection == null) {
+      // Historically we defaulted to "greater", which silently produced polarity-flipped
+      // probabilities on "less" markets (see pre-Apr-15 incident). Fail loudly instead
+      // so the caller can skip the market rather than trade on a coin-flipped signal.
+      throw new Error("thresholdDirection required for binary_threshold market");
+    }
+    pYes = computeBinaryProbability(
+      params.forecastHigh,
+      params.threshold,
+      params.sigma,
+      params.thresholdDirection
+    );
   } else {
     if (params.bucketLower == null || params.bucketUpper == null) {
       throw new Error("bucket bounds required for bucket market");

@@ -125,6 +125,24 @@ export interface TradePostmortem {
   structured_json: Record<string, unknown> | null;
 }
 
+export interface CityCalibration {
+  id: string;
+  city_key: string;
+  niche_key: string;
+  /** Empirical stdev of (actual - forecasted) over the training window. */
+  forecast_error_stdev: number;
+  /** sqrt(mean((actual - forecasted)^2)) — includes bias in its magnitude. */
+  forecast_error_rmse: number;
+  /** mean(|actual - forecasted|). */
+  forecast_error_mae: number;
+  /** Signed mean error — positive means forecasts run cold. */
+  forecast_error_mean: number;
+  sample_count: number;
+  window_days: number;
+  last_sample_at: string | null;
+  computed_at: string;
+}
+
 // ─── Query helpers ──────────────────────────────────────────────────────────
 
 const db = () => getSupabaseAdmin();
@@ -473,4 +491,37 @@ export async function updateMarketStatus(
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
+}
+
+export async function getCityCalibration(cityKey: string): Promise<CityCalibration | null> {
+  const { data, error } = await db()
+    .from("city_calibrations")
+    .select("*")
+    .eq("city_key", cityKey)
+    .single();
+  if (error && error.code !== "PGRST116") throw error;
+  return (data as CityCalibration) ?? null;
+}
+
+export async function getAllCityCalibrations(): Promise<CityCalibration[]> {
+  const { data, error } = await db().from("city_calibrations").select("*");
+  if (error) throw error;
+  return (data ?? []) as CityCalibration[];
+}
+
+export async function upsertCityCalibration(
+  cal: Omit<CityCalibration, "id" | "computed_at"> & { computed_at?: string }
+): Promise<CityCalibration> {
+  const payload = {
+    ...cal,
+    computed_at: cal.computed_at ?? new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await db()
+    .from("city_calibrations")
+    .upsert(payload, { onConflict: "city_key" })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CityCalibration;
 }
