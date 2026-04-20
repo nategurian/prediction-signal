@@ -100,9 +100,9 @@ export async function computeInsightAggregates(
 **Implementation notes:**
 
 - Single Supabase client (server-side service role) executes the queries in parallel where safe.
-- Window boundaries: `window_end = windowEnd`, `window_start_30d = windowEnd - 30d`, `window_start_7d = windowEnd - 7d`. All comparisons on `simulated_trades.settled_at`.
-- Only settled trades (`status = 'settled'`) are included.
-- PnL source: `simulated_trades.realized_pnl`.
+- Window boundaries: `window_end = windowEnd`, `window_start_30d = windowEnd - 30d`, `window_start_7d = windowEnd - 7d`. The window is filtered on `trade_postmortems.created_at` (a postmortem row exists only after settlement, so this is equivalent to "settled in window"). This matches the pattern used by `src/app/api/jobs/recalibrate-sigma/route.ts`. There is no `settled_at` column on `simulated_trades`.
+- Trades are joined to postmortems by `simulated_trade_id`. The aggregator's "trade universe" is `trade_postmortems IN window` JOIN `simulated_trades`.
+- PnL source: `simulated_trades.realized_pnl` (nullable; nulls excluded from PnL sums but counted in `tradeCount`).
 - Entry price bucketing happens in SQL (`CASE WHEN entry_price <= 0.20 THEN ... END`).
 - `reasonCodeFrequencies` is computed from `trade_postmortems.reason_codes_json` (JSONB array) joined to `simulated_trades` for `realized_pnl` attribution; losses only contribute negative PnL.
 - `suggestedTuningStrings` pulled from `trade_postmortems.structured_json -> 'llm_analysis' -> 'suggested_tuning'`, nulls filtered, capped at 100 strings to bound prompt size.
