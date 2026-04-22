@@ -39,6 +39,23 @@ export interface ModelChange {
  */
 export const MODEL_CHANGELOG: ModelChange[] = [
   {
+    version: "weather_temp_v7",
+    slug: "v7",
+    deployedAt: "2026-04-22T00:00:00Z",
+    title: "Faster calibration + forecast bias correction + Miami σ floor relief",
+    summary:
+      "Shortens the calibration window, lowers the sample threshold, applies the previously-unused forecast_error_mean as a bias correction, and drops Miami's overly conservative sigmaFloor that was forcing the model into cheap-tail YES bets.",
+    category: "calibration",
+    changes: [
+      "Miami sigmaFloor 2.5 → 1.5: the v4 floor was calibrated before empirical σ existed and was forcing Miami (observed σ ~1.3°F) to be under-confident, pushing the model into cheap-tail YES bets that consistently lost.",
+      "minCalibrationSamples 10 → 5 (both cities): empirical σ now kicks in after ~1 week instead of ~2, adapting faster to regime shifts.",
+      "calibrationWindowDays 30 → 14: stale samples from past regimes (e.g. Apr 17–19 NYC cold front) roll off in two weeks instead of a month.",
+      "New resolveForecastBiasCorrection applies forecast_error_mean (previously computed but unused) as a signed °F offset to forecastedHigh before probability calculation, clamped to ±2°F as defense against bust-induced false bias.",
+      "run-model and opportunities routes now compute probabilities against the bias-corrected forecast; confidence scoring intentionally stays on the raw forecast (it measures information quality, not bias).",
+      "feature_json now audits bias_correction, bias_source, bias_raw_mean, bias_clamped, and forecasted_high_bias_corrected for post-hoc review.",
+    ],
+  },
+  {
     version: "weather_temp_v6",
     slug: "v6",
     deployedAt: "2026-04-20T14:04:37Z",

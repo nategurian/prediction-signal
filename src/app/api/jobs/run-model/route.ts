@@ -11,7 +11,10 @@ import {
 } from "@/lib/supabase/db";
 import { computeModeledProbability } from "@/lib/engine/probability";
 import { computeConfidenceScore } from "@/lib/engine/confidence";
-import { resolveEffectiveSigma } from "@/lib/engine/calibration";
+import {
+  resolveEffectiveSigma,
+  resolveForecastBiasCorrection,
+} from "@/lib/engine/calibration";
 import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function POST(req: Request) {
@@ -82,8 +85,14 @@ export async function POST(req: Request) {
         const effectiveSigma = resolved.sigma;
         const sigmaSource = resolved.source;
 
+        const bias = resolveForecastBiasCorrection({
+          calibration,
+          minCalibrationSamples: cityConfig.minCalibrationSamples,
+        });
+        const biasCorrectedForecastHigh = forecastedHigh + bias.biasCorrection;
+
         const probResult = computeModeledProbability({
-          forecastHigh: forecastedHigh,
+          forecastHigh: biasCorrectedForecastHigh,
           marketStructure: market.market_structure,
           threshold: market.threshold_value,
           thresholdDirection: market.threshold_direction,
@@ -92,6 +101,10 @@ export async function POST(req: Request) {
           sigma: effectiveSigma,
         });
 
+        // Confidence scoring stays on the RAW forecast. Confidence is about
+        // information quality (freshness, threshold distance, revision
+        // stability, spread) — applying a bias correction would make a stale
+        // forecast appear less stale than it is.
         const confidence = computeConfidenceScore({
           forecastTimestamp,
           forecastHigh: forecastedHigh,
@@ -123,8 +136,14 @@ export async function POST(req: Request) {
           sigma_source: sigmaSource,
           sigma_raw: resolved.rawSigma,
           sigma_clamped: resolved.clamped,
+          bias_correction: bias.biasCorrection,
+          bias_source: bias.source,
+          bias_raw_mean: bias.rawMean,
+          bias_clamped: bias.clamped,
+          forecasted_high_bias_corrected: biasCorrectedForecastHigh,
           calibration_sample_count: calibration?.sample_count ?? null,
           calibration_rmse: calibration?.forecast_error_rmse ?? null,
+          calibration_mean: calibration?.forecast_error_mean ?? null,
           ensemble_stdev:
             typeof ensembleStdev === "number" && Number.isFinite(ensembleStdev)
               ? ensembleStdev

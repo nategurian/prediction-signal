@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeForecastErrorStats,
   resolveEffectiveSigma,
+  resolveForecastBiasCorrection,
 } from "../calibration";
 
 describe("computeForecastErrorStats", () => {
@@ -159,5 +160,90 @@ describe("resolveEffectiveSigma", () => {
       ensembleSigma: 0,
     });
     expect(r.source).toBe("static_fallback");
+  });
+});
+
+describe("resolveForecastBiasCorrection", () => {
+  const baseParams = {
+    minCalibrationSamples: 5,
+  };
+
+  it("returns zero correction when calibration is null", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: null,
+    });
+    expect(r.biasCorrection).toBe(0);
+    expect(r.source).toBe("none");
+    expect(r.clamped).toBe(false);
+  });
+
+  it("returns zero correction when sample_count is below threshold", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: { forecast_error_mean: 1.2, sample_count: 3 },
+    });
+    expect(r.biasCorrection).toBe(0);
+    expect(r.source).toBe("none");
+  });
+
+  it("returns zero correction when mean is non-finite", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: { forecast_error_mean: Number.NaN, sample_count: 20 },
+    });
+    expect(r.biasCorrection).toBe(0);
+    expect(r.source).toBe("none");
+  });
+
+  it("returns signed mean when sample_count meets threshold (cold-biased forecast)", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: { forecast_error_mean: 0.58, sample_count: 20 },
+    });
+    expect(r.biasCorrection).toBeCloseTo(0.58, 5);
+    expect(r.source).toBe("calibration");
+    expect(r.clamped).toBe(false);
+  });
+
+  it("returns negative correction for warm-biased forecast", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: { forecast_error_mean: -1.2, sample_count: 20 },
+    });
+    expect(r.biasCorrection).toBeCloseTo(-1.2, 5);
+    expect(r.source).toBe("calibration");
+    expect(r.clamped).toBe(false);
+  });
+
+  it("clamps to +biasClamp when mean exceeds it (guards against bust-induced bias)", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: { forecast_error_mean: 6.0, sample_count: 20 },
+      biasClamp: 2.0,
+    });
+    expect(r.biasCorrection).toBe(2.0);
+    expect(r.rawMean).toBe(6.0);
+    expect(r.clamped).toBe(true);
+  });
+
+  it("clamps to -biasClamp when mean is below it", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: { forecast_error_mean: -5.5, sample_count: 20 },
+      biasClamp: 2.0,
+    });
+    expect(r.biasCorrection).toBe(-2.0);
+    expect(r.rawMean).toBe(-5.5);
+    expect(r.clamped).toBe(true);
+  });
+
+  it("defaults biasClamp to 2.0 when unspecified", () => {
+    const r = resolveForecastBiasCorrection({
+      ...baseParams,
+      calibration: { forecast_error_mean: 4.0, sample_count: 20 },
+    });
+    expect(r.biasCorrection).toBe(2.0);
+    expect(r.clamped).toBe(true);
   });
 });

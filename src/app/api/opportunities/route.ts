@@ -16,7 +16,10 @@ import {
 import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
 import { computeModeledProbability } from "@/lib/engine/probability";
 import { computeConfidenceScore } from "@/lib/engine/confidence";
-import { resolveEffectiveSigma } from "@/lib/engine/calibration";
+import {
+  resolveEffectiveSigma,
+  resolveForecastBiasCorrection,
+} from "@/lib/engine/calibration";
 import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function GET() {
@@ -113,6 +116,12 @@ export async function GET() {
           });
           effectiveSigma = resolved.sigma;
 
+          const bias = resolveForecastBiasCorrection({
+            calibration,
+            minCalibrationSamples: cityConfig.minCalibrationSamples,
+          });
+          const biasCorrectedForecastHigh = forecastedHigh + bias.biasCorrection;
+
           const canModel =
             market.market_structure === "binary_threshold"
               ? market.threshold_value != null && market.threshold_direction != null
@@ -125,7 +134,7 @@ export async function GET() {
           ) {
             try {
               const probResult = computeModeledProbability({
-                forecastHigh: forecastedHigh,
+                forecastHigh: biasCorrectedForecastHigh,
                 marketStructure: market.market_structure,
                 threshold: market.threshold_value,
                 thresholdDirection: market.threshold_direction,

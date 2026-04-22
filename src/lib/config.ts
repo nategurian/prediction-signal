@@ -102,9 +102,15 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     sigma: 3.5,
     sigmaFloor: 3.0,
     sigmaCeiling: 7.0,
-    minCalibrationSamples: 10,
-    calibrationWindowDays: 30,
-    modelVersion: "weather_temp_v6",
+    // v7: 10 → 5. With 2 cities and ~1 settled market/day each, a window of
+    // 10 took up to 2 weeks to populate. 5 lets empirical σ kick in within ~1
+    // week while still averaging enough samples to avoid single-day noise.
+    minCalibrationSamples: 5,
+    // v7: 30 → 14. A 30-day window anchored σ to weather that no longer
+    // applies (e.g. the Apr 17–19 NYC cold-front bust) for an entire month.
+    // 14 days adapts faster while still covering typical weather regimes.
+    calibrationWindowDays: 14,
+    modelVersion: "weather_temp_v7",
     ...SHARED_TRADING_DEFAULTS,
     disabledMarketStructures: [],
   },
@@ -113,11 +119,19 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     timezone: "America/New_York",
     seriesTicker: "KXHIGHMIA",
     sigma: 2.5,
-    sigmaFloor: 2.5,
+    // v7: 2.5 → 1.5. The v4 floor was set before empirical calibration
+    // existed, as a conservative guard against 1.5°F baseline. Miami's
+    // observed ensemble_stdev runs 1.2–1.4°F and empirical RMSE ~1.3°F, so
+    // a 2.5 floor was forcing the model to be *under*confident — pushing it
+    // into cheap-tail YES bets that have been consistently losing. Letting
+    // σ drop to ≥1.5 (below typical ensemble spread but not unrealistically
+    // small) restores a truthful probability distribution without risking
+    // near-certainty collapse.
+    sigmaFloor: 1.5,
     sigmaCeiling: 5.0,
-    minCalibrationSamples: 10,
-    calibrationWindowDays: 30,
-    modelVersion: "weather_temp_v6",
+    minCalibrationSamples: 5,
+    calibrationWindowDays: 14,
+    modelVersion: "weather_temp_v7",
     ...SHARED_TRADING_DEFAULTS,
     disabledMarketStructures: ["bucket_range"],
   },

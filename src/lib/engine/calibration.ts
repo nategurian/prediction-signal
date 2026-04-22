@@ -142,3 +142,72 @@ export function resolveEffectiveSigma(params: ResolveSigmaParams): ResolvedSigma
   const clamped = Math.max(sigmaFloor, Math.min(sigmaCeiling, raw));
   return { sigma: clamped, rawSigma: raw, source, clamped: clamped !== raw };
 }
+
+/**
+ * Resolve a forecast-bias correction (signed °F offset to add to the raw
+ * forecasted high before computing probability).
+ *
+ * `forecast_error_mean` is mean(actual − forecast) over the trailing
+ * calibration window. A positive value means forecasts run systematically
+ * cold (actuals beat forecasts on average); a negative value means they run
+ * warm. Adding the mean to the forecast yields a bias-corrected point
+ * estimate of the actual.
+ *
+ * The `biasClamp` cap is defence-in-depth: a single severe regime-shift
+ * bust (e.g. the Apr 17–19 NYC cold front) can briefly push the rolling
+ * mean past ±2 °F, but a persistent true bias that large is pathological
+ * and should be investigated manually rather than silently baked into
+ * probabilities.
+ */
+export interface ResolveBiasParams {
+  calibration: {
+    forecast_error_mean: number;
+    sample_count: number;
+  } | null;
+  minCalibrationSamples: number;
+  /** Hard cap on |biasCorrection|. Defaults to 2.0 °F. */
+  biasClamp?: number;
+}
+
+export type BiasSource = "calibration" | "none";
+
+export interface ResolvedBias {
+  /** Signed °F to add to forecastedHigh. Zero when no correction applies. */
+  biasCorrection: number;
+  /** The raw forecast_error_mean before clamping, or null if no calibration. */
+  rawMean: number | null;
+  source: BiasSource;
+  clamped: boolean;
+}
+
+export function resolveForecastBiasCorrection(
+  params: ResolveBiasParams
+): ResolvedBias {
+  const { calibration, minCalibrationSamples } = params;
+  const biasClamp = params.biasClamp ?? 2.0;
+
+  if (
+    calibration == null ||
+    calibration.sample_count < minCalibrationSamples ||
+    !Number.isFinite(calibration.forecast_error_mean)
+  ) {
+    return {
+      biasCorrection: 0,
+      rawMean:
+        calibration != null && Number.isFinite(calibration.forecast_error_mean)
+          ? calibration.forecast_error_mean
+          : null,
+      source: "none",
+      clamped: false,
+    };
+  }
+
+  const raw = calibration.forecast_error_mean;
+  const clamped = Math.max(-biasClamp, Math.min(biasClamp, raw));
+  return {
+    biasCorrection: clamped,
+    rawMean: raw,
+    source: "calibration",
+    clamped: clamped !== raw,
+  };
+}
