@@ -23,8 +23,8 @@ export async function POST(req: Request) {
         const forecast = await fetchWeatherForecast(cityKey);
         const previous = await getLatestExternalData(sharedConfig.nicheKey, cityKey);
 
-        const previousForecastHigh = previous
-          ? (previous.normalized_json as Record<string, unknown>).forecasted_high as number | null
+        const previousNormalized = previous
+          ? (previous.normalized_json as Record<string, unknown>)
           : null;
 
         const cityConfig = getCityConfig(cityKey);
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
         const normalizedJson = buildNormalizedExternalJson(
           forecast,
-          previousForecastHigh,
+          previousNormalized,
           cityKey,
           { ensemble, sigmaFloor: cityConfig.sigmaFloor }
         );

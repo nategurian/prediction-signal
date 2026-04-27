@@ -1,4 +1,10 @@
-import type { OpenMeteoResponse, WeatherForecast, EnsembleForecast } from "./types";
+import type {
+  OpenMeteoResponse,
+  WeatherForecast,
+  EnsembleForecast,
+  DailyHighForecast,
+  DailyEnsembleForecast,
+} from "./types";
 import { getCityConfig } from "@/lib/config";
 
 const BASE_URL = "https://api.open-meteo.com/v1/forecast";
@@ -26,9 +32,22 @@ export async function fetchWeatherForecast(cityKey: string): Promise<WeatherFore
 
   const data: OpenMeteoResponse = await res.json();
 
-  const todayIndex = 0;
-  const forecastedHigh = data.daily.temperature_2m_max[todayIndex];
-  const forecastDate = data.daily.time[todayIndex];
+  const dailyHighs: DailyHighForecast[] = [];
+  const dailyTimes = data.daily?.time ?? [];
+  const dailyMaxes = data.daily?.temperature_2m_max ?? [];
+  const dayCount = Math.min(dailyTimes.length, dailyMaxes.length);
+  for (let i = 0; i < dayCount; i++) {
+    const date = dailyTimes[i];
+    const high = dailyMaxes[i];
+    if (typeof date !== "string" || typeof high !== "number" || !Number.isFinite(high)) continue;
+    dailyHighs.push({ forecastDate: date, forecastedHigh: high });
+  }
+  if (dailyHighs.length === 0) {
+    throw new Error("Open-Meteo response did not include any usable daily highs");
+  }
+
+  const forecastedHigh = dailyHighs[0].forecastedHigh;
+  const forecastDate = dailyHighs[0].forecastDate;
 
   let currentTemp: number | null = null;
   const hourlyTemps: { time: string; temp: number }[] = [];
@@ -56,6 +75,7 @@ export async function fetchWeatherForecast(cityKey: string): Promise<WeatherFore
   return {
     forecastedHigh,
     forecastDate,
+    dailyHighs,
     currentTemp,
     hourlyTemps,
     forecastTimestamp: new Date().toISOString(),
@@ -167,27 +187,43 @@ export async function fetchEnsembleForecast(
     const daily = data.daily as Record<string, unknown> | undefined;
     if (!daily) return null;
 
-    const todayIndex = 0;
     const times = daily.time as string[] | undefined;
     if (!times || times.length === 0) return null;
 
-    const memberHighs = parseEnsembleMembers(daily, todayIndex);
-    if (memberHighs.length < 2) return null;
+    const dailyEnsembles: DailyEnsembleForecast[] = [];
+    for (let i = 0; i < times.length; i++) {
+      const date = times[i];
+      if (typeof date !== "string") continue;
+      const memberHighs = parseEnsembleMembers(daily, i);
+      if (memberHighs.length < 2) continue;
+      const mean = memberHighs.reduce((a, b) => a + b, 0) / memberHighs.length;
+      const variance =
+        memberHighs.reduce((sum, v) => sum + (v - mean) ** 2, 0) /
+        (memberHighs.length - 1);
+      const stdev = Math.sqrt(variance);
+      dailyEnsembles.push({
+        forecastDate: date,
+        ensembleMean: mean,
+        ensembleStdev: stdev,
+        ensembleMin: Math.min(...memberHighs),
+        ensembleMax: Math.max(...memberHighs),
+        memberCount: memberHighs.length,
+        memberHighs,
+      });
+    }
 
-    const mean = memberHighs.reduce((a, b) => a + b, 0) / memberHighs.length;
-    const variance =
-      memberHighs.reduce((sum, v) => sum + (v - mean) ** 2, 0) /
-      (memberHighs.length - 1);
-    const stdev = Math.sqrt(variance);
+    if (dailyEnsembles.length === 0) return null;
+    const head = dailyEnsembles[0];
 
     return {
-      ensembleMean: mean,
-      ensembleStdev: stdev,
-      ensembleMin: Math.min(...memberHighs),
-      ensembleMax: Math.max(...memberHighs),
-      memberCount: memberHighs.length,
-      memberHighs,
-      forecastDate: times[todayIndex],
+      ensembleMean: head.ensembleMean,
+      ensembleStdev: head.ensembleStdev,
+      ensembleMin: head.ensembleMin,
+      ensembleMax: head.ensembleMax,
+      memberCount: head.memberCount,
+      memberHighs: head.memberHighs,
+      forecastDate: head.forecastDate,
+      dailyEnsembles,
     };
   } catch (err) {
     console.warn("Ensemble forecast fetch failed:", err);

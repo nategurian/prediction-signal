@@ -110,7 +110,7 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     // applies (e.g. the Apr 17–19 NYC cold-front bust) for an entire month.
     // 14 days adapts faster while still covering typical weather regimes.
     calibrationWindowDays: 14,
-    modelVersion: "weather_temp_v7",
+    modelVersion: "weather_temp_v8",
     ...SHARED_TRADING_DEFAULTS,
     disabledMarketStructures: [],
   },
@@ -131,7 +131,7 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     sigmaCeiling: 5.0,
     minCalibrationSamples: 5,
     calibrationWindowDays: 14,
-    modelVersion: "weather_temp_v7",
+    modelVersion: "weather_temp_v8",
     ...SHARED_TRADING_DEFAULTS,
     disabledMarketStructures: ["bucket_range"],
   },

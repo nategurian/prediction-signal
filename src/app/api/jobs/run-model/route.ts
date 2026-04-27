@@ -15,6 +15,7 @@ import {
   resolveEffectiveSigma,
   resolveForecastBiasCorrection,
 } from "@/lib/engine/calibration";
+import { findDailyForecastForDate } from "@/lib/weather/normalizeExternal";
 import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function POST(req: Request) {
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
     for (const c of calibrations) calibrationByCity.set(c.city_key, c);
 
     let modelsCreated = 0;
+    let modelsSkippedNoForecast = 0;
 
     for (const market of markets) {
       try {
@@ -46,25 +48,41 @@ export async function POST(req: Request) {
           continue;
         }
 
+        if (!market.market_date) {
+          console.warn(`run-model skip market ${market.ticker}: market has no market_date`);
+          continue;
+        }
+
         const snapshot = await getLatestSnapshot(market.id);
         if (!snapshot) continue;
 
         const normalized = externalData.normalized_json as Record<string, unknown>;
-        const forecastedHigh = normalized.forecasted_high as number;
+        const dailyForecast = findDailyForecastForDate(normalized, market.market_date);
+
+        if (!dailyForecast) {
+          console.warn(
+            `run-model skip market ${market.ticker}: no forecast available for market_date ${market.market_date} ` +
+              `(snapshot covers ${(normalized.daily_forecasts as Array<{ forecast_date: string }> | undefined)?.map((d) => d.forecast_date).join(",") ?? normalized.forecast_date})`
+          );
+          modelsSkippedNoForecast++;
+          continue;
+        }
+
+        const forecastedHigh = dailyForecast.forecasted_high;
         const forecastTimestamp = normalized.forecast_timestamp as string;
-        const previousForecastHigh = normalized.previous_forecast_high as number | null;
+        const previousForecastHigh = dailyForecast.previous_forecasted_high;
         const currentTemp = normalized.current_temp as number | null;
-        const leadTimeHours = normalized.lead_time_hours_to_forecast_local_noon;
-        const climatologyNormalHighF = normalized.climatology_normal_high_f;
-        const forecastAnomalyVsClimatologyF = normalized.forecast_anomaly_vs_climatology_f;
+        const leadTimeHours = dailyForecast.lead_time_hours_to_forecast_local_noon;
+        const climatologyNormalHighF = dailyForecast.climatology_normal_high_f;
+        const forecastAnomalyVsClimatologyF = dailyForecast.forecast_anomaly_vs_climatology_f;
 
         if (forecastedHigh == null || Number.isNaN(Number(forecastedHigh))) continue;
 
-        const ensembleAvailable = normalized.ensemble_available === true;
-        const ensembleSigmaUsed = normalized.ensemble_sigma_used;
-        const ensembleStdev = normalized.ensemble_stdev;
-        const ensembleMean = normalized.ensemble_mean;
-        const ensembleMemberCount = normalized.ensemble_member_count;
+        const ensembleAvailable = dailyForecast.ensemble_available === true;
+        const ensembleSigmaUsed = dailyForecast.ensemble_sigma_used;
+        const ensembleStdev = dailyForecast.ensemble_stdev;
+        const ensembleMean = dailyForecast.ensemble_mean;
+        const ensembleMemberCount = dailyForecast.ensemble_member_count;
 
         const ensembleSigmaCandidate =
           ensembleAvailable &&
@@ -117,6 +135,8 @@ export async function POST(req: Request) {
 
         const featureJson = {
           forecasted_high: forecastedHigh,
+          forecast_target_date: market.market_date,
+          forecast_source_date: dailyForecast.forecast_date,
           current_temp: currentTemp,
           forecast_timestamp: forecastTimestamp,
           previous_forecast_high: previousForecastHigh,
@@ -184,7 +204,11 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, models_created: modelsCreated });
+    return NextResponse.json({
+      ok: true,
+      models_created: modelsCreated,
+      markets_skipped_no_forecast: modelsSkippedNoForecast,
+    });
   } catch (err) {
     console.error("run-model error:", err);
     return NextResponse.json({ error: "Failed to run model" }, { status: 500 });

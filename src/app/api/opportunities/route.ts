@@ -20,6 +20,7 @@ import {
   resolveEffectiveSigma,
   resolveForecastBiasCorrection,
 } from "@/lib/engine/calibration";
+import { findDailyForecastForDate } from "@/lib/weather/normalizeExternal";
 import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
 
 export async function GET() {
@@ -89,14 +90,15 @@ export async function GET() {
           confidenceScore = modelOutput.confidence_score;
           const featureJson = (modelOutput.feature_json ?? {}) as Record<string, unknown>;
           if (typeof featureJson.sigma === "number") effectiveSigma = featureJson.sigma;
-        } else if (externalData && snapshot) {
+        } else if (externalData && snapshot && market.market_date) {
           const normalized = externalData.normalized_json as Record<string, unknown>;
-          const forecastedHigh = normalized.forecasted_high as number;
+          const dailyForecast = findDailyForecastForDate(normalized, market.market_date);
+          const forecastedHigh = dailyForecast?.forecasted_high ?? null;
           const forecastTimestamp = normalized.forecast_timestamp as string;
-          const previousForecastHigh = normalized.previous_forecast_high as number | null;
+          const previousForecastHigh = dailyForecast?.previous_forecasted_high ?? null;
 
-          const ensembleAvailable = normalized.ensemble_available === true;
-          const ensembleSigmaUsed = normalized.ensemble_sigma_used;
+          const ensembleAvailable = dailyForecast?.ensemble_available === true;
+          const ensembleSigmaUsed = dailyForecast?.ensemble_sigma_used;
 
           const ensembleSigmaCandidate =
             ensembleAvailable &&
@@ -120,7 +122,8 @@ export async function GET() {
             calibration,
             minCalibrationSamples: cityConfig.minCalibrationSamples,
           });
-          const biasCorrectedForecastHigh = forecastedHigh + bias.biasCorrection;
+          const biasCorrectedForecastHigh =
+            forecastedHigh != null ? forecastedHigh + bias.biasCorrection : null;
 
           const canModel =
             market.market_structure === "binary_threshold"
@@ -129,6 +132,7 @@ export async function GET() {
           if (
             canModel &&
             forecastedHigh != null &&
+            biasCorrectedForecastHigh != null &&
             !Number.isNaN(Number(forecastedHigh)) &&
             forecastTimestamp
           ) {

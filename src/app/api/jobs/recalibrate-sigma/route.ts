@@ -15,6 +15,19 @@ import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
  *   .feature_json.forecasted_high from postmortems created within the last
  * `calibrationWindowDays` days per city, deduplicates by market_date (one
  * weather outcome per day), and stores the result in `city_calibrations`.
+ *
+ * Two correctness gates added after the wrong-day forecast bug fix:
+ *   1. Postmortems are read in `created_at DESC` order so the dedup-by-date
+ *      step deterministically picks the freshest sample for a given date.
+ *   2. Samples are filtered to those whose recorded
+ *      `feature_json.forecast_target_date` matches the market_date — i.e.
+ *      they were produced by the post-fix run-model that selects the
+ *      forecast for the actual market_date. Pre-fix postmortems lack
+ *      `forecast_target_date` and would mix in wrong-day forecasts, so we
+ *      exclude them here. The calibration row is upserted (or zeroed) on
+ *      every run so the polluted pre-fix RMSE is cleared the first time
+ *      this lands; the resolver falls back to ensemble σ until enough
+ *      clean samples accumulate.
  */
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
@@ -33,6 +46,8 @@ export async function POST(req: Request) {
       window_days: number;
       skipped?: boolean;
       reason?: string;
+      dropped_legacy?: number;
+      dropped_target_mismatch?: number;
     }> = [];
 
     for (const cityKey of cities) {
@@ -46,7 +61,8 @@ export async function POST(req: Request) {
         .from("trade_postmortems")
         .select("structured_json, created_at")
         .gte("created_at", cutoffIso)
-        .eq("structured_json->>city_key", cityKey);
+        .eq("structured_json->>city_key", cityKey)
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.error(`recalibrate-sigma ${cityKey} fetch error:`, error);
@@ -63,6 +79,8 @@ export async function POST(req: Request) {
       }
 
       const byDate = new Map<string, ForecastErrorSample>();
+      let droppedNoTargetDate = 0;
+      let droppedTargetMismatch = 0;
       for (const row of data ?? []) {
         const s = (row as { structured_json: Record<string, unknown> | null }).structured_json;
         if (!s) continue;
@@ -71,7 +89,27 @@ export async function POST(req: Request) {
         const featureJson = modelAtSignal?.feature_json as Record<string, unknown> | null;
         const forecast = Number(featureJson?.forecasted_high);
         const marketDate = typeof s.market_date === "string" ? s.market_date : null;
+        const forecastTargetDate =
+          typeof featureJson?.forecast_target_date === "string"
+            ? (featureJson.forecast_target_date as string)
+            : null;
+
         if (!Number.isFinite(actual) || !Number.isFinite(forecast) || !marketDate) continue;
+
+        // Exclude pre-fix samples (no forecast_target_date recorded) and any
+        // post-fix sample whose forecast was scored against a different date
+        // than the market it was opened on. After the run-model fix these
+        // should never disagree, so a mismatch indicates a bug we should
+        // surface rather than silently calibrate against.
+        if (!forecastTargetDate) {
+          droppedNoTargetDate++;
+          continue;
+        }
+        if (forecastTargetDate !== marketDate) {
+          droppedTargetMismatch++;
+          continue;
+        }
+
         if (!byDate.has(marketDate)) {
           byDate.set(marketDate, {
             actual,
@@ -84,19 +122,10 @@ export async function POST(req: Request) {
       const samples = Array.from(byDate.values());
       const stats = computeForecastErrorStats(samples);
 
-      if (stats.sample_count === 0) {
-        results.push({
-          city_key: cityKey,
-          sample_count: 0,
-          forecast_error_stdev: 0,
-          forecast_error_rmse: 0,
-          window_days: windowDays,
-          skipped: true,
-          reason: "no_samples",
-        });
-        continue;
-      }
-
+      // Always upsert — even with zero samples — so a previously-polluted
+      // calibration row is cleared the first time this runs. A zero-sample
+      // row is below `minCalibrationSamples` so `resolveEffectiveSigma`
+      // automatically falls back to ensemble σ.
       await upsertCityCalibration({
         city_key: cityKey,
         niche_key: sharedConfig.nicheKey,
@@ -115,6 +144,15 @@ export async function POST(req: Request) {
         forecast_error_stdev: Number(stats.stdev.toFixed(3)),
         forecast_error_rmse: Number(stats.rmse.toFixed(3)),
         window_days: windowDays,
+        ...(stats.sample_count === 0
+          ? { skipped: true, reason: "no_clean_samples" }
+          : {}),
+        ...(droppedNoTargetDate || droppedTargetMismatch
+          ? {
+              dropped_legacy: droppedNoTargetDate,
+              dropped_target_mismatch: droppedTargetMismatch,
+            }
+          : {}),
       });
     }
 

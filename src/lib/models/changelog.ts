@@ -39,6 +39,23 @@ export interface ModelChange {
  */
 export const MODEL_CHANGELOG: ModelChange[] = [
   {
+    version: "weather_temp_v8",
+    slug: "v8",
+    deployedAt: "2026-04-27T15:14:00Z",
+    title: "Per-target-date forecast lookup (wrong-day forecast bug fix)",
+    summary:
+      "Fixes a systemic bug in which run-model applied today's high forecast to every active market regardless of its market_date. Forecasts are now stored per target date and selected by the market's settlement date; the σ recalibrator filters to clean post-fix samples and clears the polluted calibration row on first run.",
+    category: "calibration",
+    changes: [
+      "fetchWeatherForecast now persists all available forecast days (Open-Meteo forecast_days=3) as dailyHighs[] instead of only index 0; fetchEnsembleForecast does the same for ensemble dailyEnsembles[].",
+      "buildNormalizedExternalJson emits a daily_forecasts[] array keyed by forecast_date, with per-date previous_forecasted_high (looked up against the prior snapshot's matching target date) and per-date ensemble fields. Top-level fields are preserved for back-compat.",
+      "run-model now selects the daily_forecasts entry whose forecast_date == market.market_date and skips the market when no entry is available (e.g. market_date is past or beyond the forecast horizon). Pre-fix it always used today's index-0 forecast for every active market, which was responsible for both of v7's largest losses (~17–21°F misses on next-day markets).",
+      "feature_json now records forecast_target_date (= market_date) and forecast_source_date (= the per-date entry chosen) so postmortems can be filtered to clean samples.",
+      "opportunities route's live-model fallback path uses the same per-target-date lookup.",
+      "recalibrate-sigma now (a) orders postmortems by created_at DESC for deterministic dedup, (b) filters to samples whose feature_json.forecast_target_date matches market_date — excluding pre-fix wrong-day samples — and (c) always upserts (even with zero samples) so the previously-polluted calibration row is cleared on first run; the σ resolver falls back to ensemble σ until clean samples accumulate.",
+    ],
+  },
+  {
     version: "weather_temp_v7",
     slug: "v7",
     deployedAt: "2026-04-22T00:00:00Z",
