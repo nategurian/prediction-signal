@@ -136,4 +136,68 @@ describe("deriveMarketMetadataFromKalshi", () => {
     expect(m.bucket_lower).toBe(88);
     expect(m.bucket_upper).toBe(89);
   });
+
+  it.each([
+    {
+      city: "Chicago",
+      ticker: "KXHIGHCHI-26APR29-T61",
+      title: "Will the high temp in Chicago be >61° on Apr 29, 2026?",
+      strike_type: "greater" as const,
+      floor_strike: 61 as number | undefined,
+      cap_strike: undefined as number | undefined,
+      expectStructure: "binary_threshold" as const,
+      expectThreshold: 61 as number | null,
+      expectDirection: "greater" as "greater" | "less" | null,
+    },
+    {
+      city: "LA",
+      ticker: "KXHIGHLAX-26APR29-B72.5",
+      title: "Will the **high temp in LA** be 72-73° on Apr 29, 2026?",
+      strike_type: "between" as const,
+      floor_strike: 72 as number | undefined,
+      cap_strike: 73 as number | undefined,
+      expectStructure: "bucket_range" as const,
+      expectThreshold: null as number | null,
+      expectDirection: null as "greater" | "less" | null,
+    },
+    {
+      city: "Denver",
+      ticker: "KXHIGHDEN-26APR29-T56",
+      title: "Will the **high temp in Denver** be <56° on Apr 29, 2026?",
+      strike_type: "less" as const,
+      floor_strike: undefined as number | undefined,
+      cap_strike: 56 as number | undefined,
+      expectStructure: "binary_threshold" as const,
+      expectThreshold: 56 as number | null,
+      expectDirection: "less" as "greater" | "less" | null,
+    },
+    {
+      city: "Philadelphia",
+      ticker: "KXHIGHPHIL-26APR29-T71",
+      title: "Will the **high temp in Philadelphia** be >71° on Apr 29, 2026?",
+      strike_type: "greater" as const,
+      floor_strike: 71 as number | undefined,
+      cap_strike: undefined as number | undefined,
+      expectStructure: "binary_threshold" as const,
+      expectThreshold: 71 as number | null,
+      expectDirection: "greater" as "greater" | "less" | null,
+    },
+  ])("parses $city ticker $ticker correctly", (c) => {
+    const m = deriveMarketMetadataFromKalshi(
+      baseKm({
+        ticker: c.ticker,
+        title: c.title,
+        strike_type: c.strike_type,
+        floor_strike: c.floor_strike,
+        cap_strike: c.cap_strike,
+      })
+    );
+    expect(m.market_structure).toBe(c.expectStructure);
+    expect(m.threshold_value).toBe(c.expectThreshold);
+    expect(m.threshold_direction).toBe(c.expectDirection);
+    if (c.expectStructure === "bucket_range") {
+      expect(m.bucket_lower).toBe(c.floor_strike);
+      expect(m.bucket_upper).toBe(c.cap_strike);
+    }
+  });
 });

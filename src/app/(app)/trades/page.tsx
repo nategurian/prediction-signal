@@ -146,9 +146,18 @@ function shortModel(v: string | null): string {
   return m ? `v${m[1]}` : v;
 }
 
+const CITY_LABELS: Record<string, string> = {
+  nyc: "NYC",
+  miami: "MIA",
+  chi: "CHI",
+  la: "LAX",
+  den: "DEN",
+  phil: "PHL",
+};
+
 function CityBadge({ city }: { city: string | null }) {
   if (!city) return <span className="text-zinc-600">—</span>;
-  const label = city === "nyc" ? "NYC" : city === "miami" ? "MIA" : city.toUpperCase();
+  const label = CITY_LABELS[city] ?? city.toUpperCase();
   return (
     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
       {label}

@@ -69,7 +69,7 @@ export interface CityConfig {
   minBucketWidthSigmaRatio: number;
 }
 
-export type CityKey = "nyc" | "miami";
+export type CityKey = "nyc" | "miami" | "chi" | "la" | "den" | "phil";
 
 const SHARED_TRADING_DEFAULTS = {
   minTradeEdge: 0.08,
@@ -134,6 +134,75 @@ export const CITY_REGISTRY: Record<CityKey, CityConfig> = {
     modelVersion: "weather_temp_v8",
     ...SHARED_TRADING_DEFAULTS,
     disabledMarketStructures: ["bucket_range"],
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // Phase-1 expansion (Apr 2026). Coordinates use each city's primary NWS
+  // reporting airport (ORD, LAX, DEN, PHL) to align the forecast frame with
+  // the settlement frame. σ priors are conservative climate-regime guesses
+  // and will be replaced by empirical RMSE after ≥5 settled trades per city
+  // (typically ~1 week).
+  // ────────────────────────────────────────────────────────────────────────
+  chi: {
+    cityCoords: { latitude: 41.9803, longitude: -87.909 },
+    timezone: "America/Chicago",
+    seriesTicker: "KXHIGHCHI",
+    // Continental midwest with frequent frontal passages and lake-breeze
+    // effects in spring/summer; empirically wider than NYC.
+    sigma: 4.0,
+    sigmaFloor: 2.5,
+    sigmaCeiling: 8.0,
+    minCalibrationSamples: 5,
+    calibrationWindowDays: 14,
+    modelVersion: "weather_temp_v8",
+    ...SHARED_TRADING_DEFAULTS,
+    disabledMarketStructures: [],
+  },
+  la: {
+    cityCoords: { latitude: 33.9416, longitude: -118.4085 },
+    timezone: "America/Los_Angeles",
+    seriesTicker: "KXHIGHLAX",
+    // Coastal Mediterranean climate; mirrors Miami's stability profile.
+    sigma: 2.5,
+    sigmaFloor: 1.5,
+    sigmaCeiling: 5.0,
+    minCalibrationSamples: 5,
+    calibrationWindowDays: 14,
+    modelVersion: "weather_temp_v8",
+    ...SHARED_TRADING_DEFAULTS,
+    // 1°F-wide bucket markets at σ=2.5 fall below minBucketWidthSigmaRatio=1.5
+    // (1/2.5 = 0.4); the engine would NO_TRADE all bucket_range entries
+    // anyway. Disabling mirrors Miami and clarifies intent.
+    disabledMarketStructures: ["bucket_range"],
+  },
+  den: {
+    cityCoords: { latitude: 39.8617, longitude: -104.6731 },
+    timezone: "America/Denver",
+    seriesTicker: "KXHIGHDEN",
+    // High-altitude continental + downslope (chinook) winds → wider error
+    // tails. Highest σ in the registry; calibration may relax this within
+    // ~1 week.
+    sigma: 4.5,
+    sigmaFloor: 3.0,
+    sigmaCeiling: 9.0,
+    minCalibrationSamples: 5,
+    calibrationWindowDays: 14,
+    modelVersion: "weather_temp_v8",
+    ...SHARED_TRADING_DEFAULTS,
+    disabledMarketStructures: [],
+  },
+  phil: {
+    cityCoords: { latitude: 39.8729, longitude: -75.2437 },
+    timezone: "America/New_York",
+    seriesTicker: "KXHIGHPHIL",
+    // Mid-Atlantic seaboard; very similar regime to NYC.
+    sigma: 3.5,
+    sigmaFloor: 3.0,
+    sigmaCeiling: 7.0,
+    minCalibrationSamples: 5,
+    calibrationWindowDays: 14,
+    modelVersion: "weather_temp_v8",
+    ...SHARED_TRADING_DEFAULTS,
+    disabledMarketStructures: [],
   },
 };
 
