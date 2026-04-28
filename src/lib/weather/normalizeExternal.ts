@@ -151,6 +151,7 @@ export function buildNormalizedExternalJson(
   const head = dailyForecasts[0];
 
   const base: Record<string, unknown> = {
+    schema_version: 2,
     forecasted_high: head.forecasted_high,
     forecast_date: head.forecast_date,
     current_temp: forecast.currentTemp,
@@ -180,6 +181,27 @@ export function buildNormalizedExternalJson(
     }
   }
 
+  // Phase 2a: variable-keyed mirror of the daily slice. Only daily_high is
+  // populated today; Phase 2b adds the daily_low slice once the Open-Meteo
+  // low fetch is wired in. Read sites prefer this block when present and
+  // fall back to the legacy root fields above for pre-v2 snapshots.
+  base.by_variable = {
+    daily_high: {
+      daily_forecasts: dailyForecasts,
+      ensemble: head.ensemble_available
+        ? {
+            available: true,
+            mean: head.ensemble_mean ?? null,
+            stdev: head.ensemble_stdev ?? null,
+            min: head.ensemble_min ?? null,
+            max: head.ensemble_max ?? null,
+            member_count: head.ensemble_member_count ?? null,
+            sigma_used: head.ensemble_sigma_used ?? null,
+          }
+        : { available: false },
+    },
+  };
+
   return base;
 }
 
@@ -201,6 +223,45 @@ export function findDailyForecastForDate(
     if (e.forecast_date === targetDate && typeof e.forecasted_high === "number") {
       return e as unknown as NormalizedDailyForecast;
     }
+  }
+  return null;
+}
+
+/**
+ * Variable-aware per-date forecast lookup.
+ *
+ * Reads from `normalized_json.by_variable[variable].daily_forecasts` when the
+ * v2 block is present, and falls back to the legacy root-level
+ * `daily_forecasts` for pre-v2 snapshots — but the fallback only applies for
+ * `daily_high`, since legacy snapshots only ever held high-temperature data.
+ * Phase 2b populates the `daily_low` slice; until then this returns null for
+ * `daily_low`.
+ */
+export function findDailyForecastForVariableAndDate(
+  normalizedJson: Record<string, unknown> | null | undefined,
+  variable: "daily_high" | "daily_low",
+  targetDate: string | null | undefined
+): NormalizedDailyForecast | null {
+  if (!normalizedJson || !targetDate) return null;
+  const byVariable = normalizedJson.by_variable as
+    | Record<string, { daily_forecasts?: unknown }>
+    | undefined;
+  const slice = byVariable?.[variable];
+  if (slice && Array.isArray(slice.daily_forecasts)) {
+    for (const entry of slice.daily_forecasts as unknown[]) {
+      if (!entry || typeof entry !== "object") continue;
+      const e = entry as Record<string, unknown>;
+      if (
+        e.forecast_date === targetDate &&
+        typeof e.forecasted_high === "number"
+      ) {
+        return e as unknown as NormalizedDailyForecast;
+      }
+    }
+    return null;
+  }
+  if (variable === "daily_high") {
+    return findDailyForecastForDate(normalizedJson, targetDate);
   }
   return null;
 }

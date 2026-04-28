@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildNormalizedExternalJson,
   findDailyForecastForDate,
+  findDailyForecastForVariableAndDate,
 } from "../normalizeExternal";
 import type {
   WeatherForecast,
@@ -237,5 +238,126 @@ describe("findDailyForecastForDate", () => {
   it("returns null on null inputs", () => {
     expect(findDailyForecastForDate(null, "2026-04-15")).toBeNull();
     expect(findDailyForecastForDate(normalized, null)).toBeNull();
+  });
+});
+
+describe("schema_version 2 — by_variable block", () => {
+  it("emits schema_version=2 and a by_variable.daily_high block mirroring legacy data", () => {
+    const result = buildNormalizedExternalJson(
+      {
+        ...baseForecast,
+        forecastedHigh: 70,
+        forecastDate: "2026-04-29",
+        dailyHighs: [{ forecastDate: "2026-04-29", forecastedHigh: 70 }],
+      },
+      null,
+      "nyc"
+    );
+    expect(result.schema_version).toBe(2);
+    const byVariable = result.by_variable as Record<string, unknown> | undefined;
+    expect(byVariable).toBeDefined();
+    const dailyHigh = byVariable!.daily_high as Record<string, unknown>;
+    expect(dailyHigh).toBeDefined();
+    expect(Array.isArray(dailyHigh.daily_forecasts)).toBe(true);
+    const dailyForecasts = dailyHigh.daily_forecasts as Array<{
+      forecasted_high: number;
+      forecast_date: string;
+    }>;
+    expect(dailyForecasts[0].forecasted_high).toBe(70);
+    expect(dailyForecasts[0].forecast_date).toBe("2026-04-29");
+  });
+
+  it("does not emit by_variable.daily_low in Phase 2a", () => {
+    const result = buildNormalizedExternalJson(baseForecast, null, "nyc");
+    const byVariable = result.by_variable as Record<string, unknown>;
+    expect(byVariable.daily_low).toBeUndefined();
+  });
+
+  it("by_variable.daily_high.ensemble mirrors legacy ensemble_* root fields when ensemble is provided", () => {
+    const ensemble = buildEnsemble([
+      {
+        forecastDate: "2026-04-15",
+        mean: 85.2,
+        stdev: 2.1,
+        min: 81.0,
+        max: 89.5,
+        memberCount: 50,
+        memberHighs: Array.from({ length: 50 }, (_, i) => 81 + i * 0.18),
+      },
+    ]);
+    const result = buildNormalizedExternalJson(baseForecast, null, "nyc", {
+      ensemble,
+      sigmaFloor: 1.5,
+    });
+    const dailyHigh = (result.by_variable as Record<string, Record<string, unknown>>)
+      .daily_high;
+    const ensembleSlice = dailyHigh.ensemble as Record<string, unknown>;
+    expect(ensembleSlice.available).toBe(true);
+    expect(ensembleSlice.mean).toBe(85.2);
+    expect(ensembleSlice.stdev).toBe(2.1);
+    expect(ensembleSlice.sigma_used).toBe(2.1);
+  });
+});
+
+describe("findDailyForecastForVariableAndDate", () => {
+  const normalized = buildNormalizedExternalJson(
+    {
+      ...baseForecast,
+      dailyHighs: [
+        { forecastDate: "2026-04-15", forecastedHigh: 80 },
+        { forecastDate: "2026-04-16", forecastedHigh: 84 },
+      ],
+    },
+    null,
+    "nyc"
+  );
+
+  it("reads from by_variable.daily_high when present", () => {
+    const entry = findDailyForecastForVariableAndDate(
+      normalized,
+      "daily_high",
+      "2026-04-16"
+    );
+    expect(entry?.forecasted_high).toBe(84);
+  });
+
+  it("returns null for daily_low when by_variable.daily_low is absent (Phase 2a)", () => {
+    expect(
+      findDailyForecastForVariableAndDate(normalized, "daily_low", "2026-04-15")
+    ).toBeNull();
+  });
+
+  it("falls back to legacy daily_forecasts when by_variable is missing (pre-v2 snapshot)", () => {
+    const legacy: Record<string, unknown> = {
+      forecasted_high: 80,
+      forecast_date: "2026-04-15",
+      daily_forecasts: [
+        {
+          forecast_date: "2026-04-15",
+          forecasted_high: 80,
+          previous_forecasted_high: null,
+          forecast_revision: null,
+          climatology_normal_high_f: 65,
+          forecast_anomaly_vs_climatology_f: 15,
+          lead_time_hours_to_forecast_local_noon: 14,
+          ensemble_available: false,
+        },
+      ],
+    };
+    const entry = findDailyForecastForVariableAndDate(
+      legacy,
+      "daily_high",
+      "2026-04-15"
+    );
+    expect(entry?.forecasted_high).toBe(80);
+  });
+
+  it("returns null on null inputs", () => {
+    expect(
+      findDailyForecastForVariableAndDate(null, "daily_high", "2026-04-15")
+    ).toBeNull();
+    expect(
+      findDailyForecastForVariableAndDate(normalized, "daily_high", null)
+    ).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+import type { WeatherVariable } from "@/lib/config";
 import { getSupabaseAdmin } from "./server";
 
 // ─── Types matching DB schema ───────────────────────────────────────────────
@@ -9,6 +10,11 @@ export interface Market {
   category: string | null;
   niche_key: string;
   city_key: string;
+  /**
+   * Predictand variable for this market. Phase 2a introduces the column with
+   * default 'daily_high'; Phase 2b begins producing 'daily_low' markets.
+   */
+  variable: WeatherVariable;
   market_structure: "binary_threshold" | "bucket_range";
   market_date: string | null;
   threshold_value: number | null;
@@ -128,6 +134,8 @@ export interface TradePostmortem {
 export interface CityCalibration {
   id: string;
   city_key: string;
+  /** Predictand variable: per-city, per-variable calibration row. */
+  variable: WeatherVariable;
   niche_key: string;
   /** Empirical stdev of (actual - forecasted) over the training window. */
   forecast_error_stdev: number;
@@ -547,7 +555,7 @@ export async function upsertCityCalibration(
   };
   const { data, error } = await db()
     .from("city_calibrations")
-    .upsert(payload, { onConflict: "city_key" })
+    .upsert(payload, { onConflict: "city_key,variable" })
     .select()
     .single();
   if (error) throw error;

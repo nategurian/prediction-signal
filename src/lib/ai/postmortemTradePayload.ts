@@ -1,5 +1,5 @@
 import type { PostmortemTradeData } from "@/lib/ai/postmortems";
-import { getCityConfig } from "@/lib/config";
+import { getSeriesConfig } from "@/lib/config";
 import {
   getExternalDataSnapshotById,
   getModelOutputById,
@@ -97,17 +97,19 @@ export async function buildPostmortemTradePayload(args: {
       ? "threshold"
       : "unknown";
 
-  const forecastHigh =
-    (modelOutput?.feature_json as Record<string, unknown> | null)?.forecasted_high as
-      | number
-      | undefined ?? null;
+  const featureJson = (modelOutput?.feature_json as Record<string, unknown> | null) ?? null;
+  // Variable-aware: prefer the new field, fall back to legacy.
+  const forecastValue =
+    (featureJson?.forecasted_value as number | undefined) ??
+    (featureJson?.forecasted_high as number | undefined) ??
+    null;
 
   const won =
     (trade.side === "YES" && settledTrade.exit_price === 1) ||
     (trade.side === "NO" && settledTrade.exit_price === 1);
 
   const sanityFlags = computeSanityFlags({
-    forecastHigh,
+    forecastHigh: forecastValue,
     actualHigh: actualHighTemp ?? null,
     modeledYesProb: signal?.modeled_yes_probability ?? null,
     thresholdDirection: market.threshold_direction,
@@ -115,7 +117,7 @@ export async function buildPostmortemTradePayload(args: {
     threshold: market.threshold_value,
     entryPrice: trade.entry_price,
     won,
-    sigma: getCityConfig(market.city_key).sigma,
+    sigma: getSeriesConfig(market.city_key, market.variable).sigma,
   });
 
   return {
@@ -123,6 +125,11 @@ export async function buildPostmortemTradePayload(args: {
     market_title: market.title,
     market_date: market.market_date,
     city_key: market.city_key,
+    // Phase 2a: variable + variable-neutral mirrors. Legacy *_high fields are
+    // preserved so older readers keep working through the cleanup window.
+    variable: market.variable,
+    actual_value: actualHighTemp ?? null,
+    forecasted_value: forecastValue,
     niche_key: market.niche_key,
     contract_style: contractStyle,
     threshold_direction: market.threshold_direction,

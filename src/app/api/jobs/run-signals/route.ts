@@ -7,10 +7,14 @@ import {
   getTradesForMarket,
 } from "@/lib/supabase/db";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
+import {
+  computeTradeEdges,
+  selectAction,
+  type TradingConfig,
+} from "@/lib/engine/signal";
 import { generateSignalExplanation } from "@/lib/ai/explanations";
 import { openPaperTrade } from "@/lib/engine/simulation";
-import { getCityConfig } from "@/lib/config";
+import { getCityConfig, getSeriesConfig } from "@/lib/config";
 
 /** Non-LLM line for Opportunities when we skip OpenAI (NO_TRADE). */
 function noTradeSummaryFromSignalData(data: {
@@ -36,6 +40,11 @@ export async function POST(req: Request) {
 
     for (const market of markets) {
       const cityConfig = getCityConfig(market.city_key);
+      const seriesConfig = getSeriesConfig(market.city_key, market.variable);
+      const tradingConfig: TradingConfig = {
+        ...cityConfig,
+        disabledMarketStructures: seriesConfig.disabledMarketStructures,
+      };
 
       const snapshot = await getLatestSnapshot(market.id);
       if (!snapshot || snapshot.yes_ask == null || snapshot.no_ask == null) continue;
@@ -52,7 +61,7 @@ export async function POST(req: Request) {
       if (!modelOutput) continue;
 
       const modeledYesProb = modelOutput.modeled_probability as number;
-      const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask, cityConfig);
+      const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask, tradingConfig);
 
       const existingTrades = await getTradesForMarket(market.id);
       const hasOpenTrade = existingTrades.length > 0;
@@ -78,7 +87,7 @@ export async function POST(req: Request) {
         modeledYesProbability: modeledYesProb,
         bucketWidth,
         effectiveSigma,
-      }, cityConfig);
+      }, tradingConfig);
 
       const worthTrading = action !== "NO_TRADE";
 
@@ -99,7 +108,7 @@ export async function POST(req: Request) {
         effective_no_entry: edges.effectiveNoEntry,
         confidence_score: modelOutput.confidence_score,
         signal_type: action,
-        model_version: cityConfig.modelVersion,
+        model_version: seriesConfig.modelVersion,
       };
 
       let explanation: { summary: string; reasonCodes: string[] };
@@ -133,7 +142,7 @@ export async function POST(req: Request) {
         trade_edge_yes: edges.tradeEdgeYes,
         trade_edge_no: edges.tradeEdgeNo,
         worth_trading: worthTrading,
-        model_version: cityConfig.modelVersion,
+        model_version: seriesConfig.modelVersion,
       });
 
       signalsCreated++;

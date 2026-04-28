@@ -101,7 +101,7 @@ function getOpenAIClient(): OpenAI {
 function fillTemplate(template: string, data: Record<string, string>): string {
   let result = template;
   for (const [key, value] of Object.entries(data)) {
-    result = result.replace(`{{${key}}}`, value);
+    result = result.split(`{{${key}}}`).join(value);
   }
   return result;
 }
@@ -134,12 +134,15 @@ export async function generateAndSavePostmortem(
     (trade.side === "YES" && settlement.settlement_value === 1) ||
     (trade.side === "NO" && settlement.settlement_value === 0);
 
+  const variableLabel = tradeData.variable === "daily_low" ? "low" : "high";
+
   const prompt = fillTemplate(POSTMORTEM_PROMPT, {
     tradeData: JSON.stringify(tradeData, null, 2),
     outcome: settlement.outcome,
     correctness: won ? "correct" : "incorrect",
     predictedSide: trade.side,
     actualOutcome: settlement.settlement_value === 1 ? "YES" : "NO",
+    variableLabel,
   });
 
   let result: PostmortemResult;

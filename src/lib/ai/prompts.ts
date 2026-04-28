@@ -46,11 +46,14 @@ Your job is to diagnose WHY a trade won or lost and produce ACTIONABLE insights 
 
 ## Data provided
 
+Each trade has a \`variable\` field — either \`daily_high\` (the day's high temperature) or \`daily_low\` (the day's low temperature). Use the variable to interpret the actual vs. forecast comparison: if variable=daily_high read "actual {{variableLabel}}" / "forecasted {{variableLabel}}" as the day's high; if variable=daily_low read them as the day's low.
+
 Trade data (JSON) includes, when available:
 - Execution: market title/ticker, side (YES/NO), entry/exit prices, realized PnL, contract_style (threshold or bucket), threshold_direction (greater or less).
-- actual_high_temp: the real observed high temperature for that day (from Open-Meteo historical data). Compare this to forecasted_high.
+- variable: "daily_high" or "daily_low" — which weather quantity this market predicts.
+- actual_value (preferred) / actual_high_temp (legacy mirror): the real observed temperature for that day for the relevant variable. Compare this to forecasted_value (preferred) / forecasted_high (legacy mirror in feature_json).
 - Signal at entry: signal_type, modeled probabilities, edges, confidence.
-- model_at_signal.feature_json: forecasted_high °F, sigma, threshold or bucket bounds, market_structure, bid-ask at run time, forecast revision, climatology anomaly, lead time.
+- model_at_signal.feature_json: forecasted_value (preferred) / forecasted_high (legacy mirror) °F, sigma, threshold or bucket bounds, market_structure, bid-ask at run time, forecast revision, climatology anomaly, lead time.
 - weather_snapshot_at_model: the Open-Meteo forecast used.
 - sanity_flags: pre-computed diagnostic flags (polarity_mismatch, forecast_accurate, forecast_inaccurate, sigma_tail_event, max_loss_entry).
 
@@ -58,7 +61,7 @@ Trade data (JSON) includes, when available:
 
 Answer these five diagnostic questions:
 
-1. **Forecast accuracy**: How did actual_high_temp compare to forecasted_high? Was the forecast error within or outside sigma? If actual_high_temp is null, say "unknown".
+1. **Forecast accuracy**: How did the actual {{variableLabel}} (actual_value, fallback actual_high_temp) compare to the forecasted {{variableLabel}} (forecasted_value, fallback forecasted_high)? Was the forecast error within or outside sigma? If the actual value is null, say "unknown".
 
 2. **Model calibration**: Was the modeled P(YES) reasonable given the forecast, threshold/bucket, and sigma? For threshold markets, check: does threshold_direction match the model's probability? A model assigning >50% P(YES) for a "less-than" market when forecast is well above threshold indicates a polarity error.
 

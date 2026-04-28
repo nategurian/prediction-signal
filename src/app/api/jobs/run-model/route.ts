@@ -15,8 +15,13 @@ import {
   resolveEffectiveSigma,
   resolveForecastBiasCorrection,
 } from "@/lib/engine/calibration";
-import { findDailyForecastForDate } from "@/lib/weather/normalizeExternal";
-import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
+import { findDailyForecastForVariableAndDate } from "@/lib/weather/normalizeExternal";
+import {
+  getCityConfig,
+  getAllCityKeys,
+  getSeriesConfig,
+  sharedConfig,
+} from "@/lib/config";
 
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
@@ -32,8 +37,10 @@ export async function POST(req: Request) {
     }
 
     const calibrations = await getAllCityCalibrations();
-    const calibrationByCity = new Map<string, CityCalibration>();
-    for (const c of calibrations) calibrationByCity.set(c.city_key, c);
+    const calibrationByCityVariable = new Map<string, CityCalibration>();
+    for (const c of calibrations) {
+      calibrationByCityVariable.set(`${c.city_key}|${c.variable}`, c);
+    }
 
     let modelsCreated = 0;
     let modelsSkippedNoForecast = 0;
@@ -41,6 +48,7 @@ export async function POST(req: Request) {
     for (const market of markets) {
       try {
         const cityConfig = getCityConfig(market.city_key);
+        const seriesConfig = getSeriesConfig(market.city_key, market.variable);
         const externalData = externalDataByCity.get(market.city_key);
 
         if (!externalData) {
@@ -57,11 +65,15 @@ export async function POST(req: Request) {
         if (!snapshot) continue;
 
         const normalized = externalData.normalized_json as Record<string, unknown>;
-        const dailyForecast = findDailyForecastForDate(normalized, market.market_date);
+        const dailyForecast = findDailyForecastForVariableAndDate(
+          normalized,
+          market.variable,
+          market.market_date
+        );
 
         if (!dailyForecast) {
           console.warn(
-            `run-model skip market ${market.ticker}: no forecast available for market_date ${market.market_date} ` +
+            `run-model skip market ${market.ticker}: no forecast available for market_date ${market.market_date} variable ${market.variable} ` +
               `(snapshot covers ${(normalized.daily_forecasts as Array<{ forecast_date: string }> | undefined)?.map((d) => d.forecast_date).join(",") ?? normalized.forecast_date})`
           );
           modelsSkippedNoForecast++;
@@ -91,14 +103,16 @@ export async function POST(req: Request) {
             ? ensembleSigmaUsed
             : null;
 
-        const calibration = calibrationByCity.get(market.city_key) ?? null;
+        const calibration =
+          calibrationByCityVariable.get(`${market.city_key}|${market.variable}`) ??
+          null;
         const resolved = resolveEffectiveSigma({
           calibration,
           ensembleSigma: ensembleSigmaCandidate,
-          staticSigma: cityConfig.sigma,
+          staticSigma: seriesConfig.sigma,
           minCalibrationSamples: cityConfig.minCalibrationSamples,
-          sigmaFloor: cityConfig.sigmaFloor,
-          sigmaCeiling: cityConfig.sigmaCeiling,
+          sigmaFloor: seriesConfig.sigmaFloor,
+          sigmaCeiling: seriesConfig.sigmaCeiling,
         });
         const effectiveSigma = resolved.sigma;
         const sigmaSource = resolved.source;
@@ -134,6 +148,8 @@ export async function POST(req: Request) {
         }, sharedConfig.confidenceWeights);
 
         const featureJson = {
+          variable: market.variable,
+          forecasted_value: forecastedHigh,
           forecasted_high: forecastedHigh,
           forecast_target_date: market.market_date,
           forecast_source_date: dailyForecast.forecast_date,
@@ -191,7 +207,7 @@ export async function POST(req: Request) {
           modeled_probability: probResult.modeledYesProbability,
           confidence_score: confidence,
           feature_json: featureJson,
-          model_version: cityConfig.modelVersion,
+          model_version: seriesConfig.modelVersion,
           external_data_id: externalData.id,
         });
 

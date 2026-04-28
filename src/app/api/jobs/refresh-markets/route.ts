@@ -5,7 +5,11 @@ import type { KalshiMarket } from "@/lib/kalshi/types";
 import { kalshiMarketToQuotePrices, kalshiVolume, needsFullMarketQuoteFetch } from "@/lib/kalshi/quotes";
 import { deriveMarketMetadataFromKalshi } from "@/lib/kalshi/marketMetadata";
 import { getActiveMarkets, upsertMarket, insertMarketSnapshot } from "@/lib/supabase/db";
-import { CITY_REGISTRY, getAllCityKeys, cityKeyFromMarketTicker, sharedConfig } from "@/lib/config";
+import {
+  getAllSeriesConfigs,
+  seriesInfoFromMarketTicker,
+  sharedConfig,
+} from "@/lib/config";
 
 /** Kalshi returns tradable markets as `active` (and sometimes `open`). */
 function isKalshiMarketOpen(status: string | undefined): boolean {
@@ -29,7 +33,9 @@ function parseDateFromTicker(ticker: string): string | null {
 async function upsertMarketAndSnapshotFromDetail(detail: KalshiMarket): Promise<void> {
   const derived = deriveMarketMetadataFromKalshi(detail);
   const marketDate = parseDateFromTicker(detail.ticker);
-  const cityKey = cityKeyFromMarketTicker(detail.ticker) ?? "nyc";
+  const seriesInfo = seriesInfoFromMarketTicker(detail.ticker);
+  const cityKey = seriesInfo?.cityKey ?? "nyc";
+  const variable = seriesInfo?.variable ?? "daily_high";
 
   const market = await upsertMarket({
     ticker: detail.ticker,
@@ -37,6 +43,7 @@ async function upsertMarketAndSnapshotFromDetail(detail: KalshiMarket): Promise<
     category: detail.category ?? "weather",
     niche_key: sharedConfig.nicheKey,
     city_key: cityKey,
+    variable,
     market_structure: derived.market_structure,
     market_date: marketDate,
     threshold_value: derived.threshold_value,
@@ -71,7 +78,7 @@ export async function POST(req: Request) {
 
   try {
     const client = new KalshiClient();
-    const seriesTickers = getAllCityKeys().map((k) => CITY_REGISTRY[k].seriesTicker);
+    const seriesTickers = getAllSeriesConfigs().map((s) => s.seriesTicker);
     const markets = await client.getAllWeatherMarkets(seriesTickers);
 
     let upserted = 0;

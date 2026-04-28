@@ -13,15 +13,24 @@ import {
   type Signal,
   type ExternalDataSnapshot,
 } from "@/lib/supabase/db";
-import { computeTradeEdges, selectAction } from "@/lib/engine/signal";
+import {
+  computeTradeEdges,
+  selectAction,
+  type TradingConfig,
+} from "@/lib/engine/signal";
 import { computeModeledProbability } from "@/lib/engine/probability";
 import { computeConfidenceScore } from "@/lib/engine/confidence";
 import {
   resolveEffectiveSigma,
   resolveForecastBiasCorrection,
 } from "@/lib/engine/calibration";
-import { findDailyForecastForDate } from "@/lib/weather/normalizeExternal";
-import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
+import { findDailyForecastForVariableAndDate } from "@/lib/weather/normalizeExternal";
+import {
+  getCityConfig,
+  getAllCityKeys,
+  getSeriesConfig,
+  sharedConfig,
+} from "@/lib/config";
 
 export async function GET() {
   try {
@@ -35,8 +44,10 @@ export async function GET() {
     }
 
     const calibrations = await getAllCityCalibrations();
-    const calibrationByCity = new Map<string, CityCalibration>();
-    for (const c of calibrations) calibrationByCity.set(c.city_key, c);
+    const calibrationByCityVariable = new Map<string, CityCalibration>();
+    for (const c of calibrations) {
+      calibrationByCityVariable.set(`${c.city_key}|${c.variable}`, c);
+    }
 
     const signalsByMarket = new Map<string, Signal>();
     for (const s of signals) {
@@ -79,6 +90,11 @@ export async function GET() {
 
         const modelOutput = await getLatestModelOutput(market.id);
         const cityConfig = getCityConfig(market.city_key);
+        const seriesConfig = getSeriesConfig(market.city_key, market.variable);
+        const tradingConfig: TradingConfig = {
+          ...cityConfig,
+          disabledMarketStructures: seriesConfig.disabledMarketStructures,
+        };
         const externalData = externalDataByCity.get(market.city_key);
 
         let modeledYesProb: number | null = null;
@@ -92,7 +108,11 @@ export async function GET() {
           if (typeof featureJson.sigma === "number") effectiveSigma = featureJson.sigma;
         } else if (externalData && snapshot && market.market_date) {
           const normalized = externalData.normalized_json as Record<string, unknown>;
-          const dailyForecast = findDailyForecastForDate(normalized, market.market_date);
+          const dailyForecast = findDailyForecastForVariableAndDate(
+            normalized,
+            market.variable,
+            market.market_date
+          );
           const forecastedHigh = dailyForecast?.forecasted_high ?? null;
           const forecastTimestamp = normalized.forecast_timestamp as string;
           const previousForecastHigh = dailyForecast?.previous_forecasted_high ?? null;
@@ -107,14 +127,16 @@ export async function GET() {
               ? ensembleSigmaUsed
               : null;
 
-          const calibration = calibrationByCity.get(market.city_key) ?? null;
+          const calibration =
+            calibrationByCityVariable.get(`${market.city_key}|${market.variable}`) ??
+            null;
           const resolved = resolveEffectiveSigma({
             calibration,
             ensembleSigma: ensembleSigmaCandidate,
-            staticSigma: cityConfig.sigma,
+            staticSigma: seriesConfig.sigma,
             minCalibrationSamples: cityConfig.minCalibrationSamples,
-            sigmaFloor: cityConfig.sigmaFloor,
-            sigmaCeiling: cityConfig.sigmaCeiling,
+            sigmaFloor: seriesConfig.sigmaFloor,
+            sigmaCeiling: seriesConfig.sigmaCeiling,
           });
           effectiveSigma = resolved.sigma;
 
@@ -169,7 +191,7 @@ export async function GET() {
           modeledYesProb != null &&
           confidenceScore != null
         ) {
-          const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask, cityConfig);
+          const edges = computeTradeEdges(modeledYesProb, snapshot.yes_ask, snapshot.no_ask, tradingConfig);
           const existingTrades = await getTradesForMarket(market.id);
           const bucketWidth =
             market.bucket_upper != null && market.bucket_lower != null
@@ -190,7 +212,7 @@ export async function GET() {
             modeledYesProbability: modeledYesProb,
             bucketWidth,
             effectiveSigma: effectiveSigma ?? null,
-          }, cityConfig);
+          }, tradingConfig);
           const worthTrading = action !== "NO_TRADE";
 
           return {

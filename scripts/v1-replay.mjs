@@ -294,8 +294,15 @@ async function main() {
   // settlement_time must be > window start (i.e. the market hadn't settled yet),
   // and market_date must be on-or-before window end + 10 days (upper bound on
   // how far forward the listing goes).
+  // Phase 2a: this script reads `forecasted_high` from the legacy root of
+  // normalized_json, which is always daily_high data. Filtering to
+  // variable='daily_high' here defends against Phase 2b daily_low markets
+  // accidentally entering the replay before the script learns the
+  // by_variable lookup.
   const marketsRes = await client.query(
-    `SELECT id, ticker, city_key, market_structure::text AS market_structure,
+    `SELECT id, ticker, city_key,
+            COALESCE(variable, 'daily_high') AS variable,
+            market_structure::text AS market_structure,
             to_char(market_date, 'YYYY-MM-DD') AS market_date,
             threshold_value, threshold_direction, bucket_lower,
             bucket_upper,
@@ -303,6 +310,7 @@ async function main() {
             close_time::text AS close_time
        FROM markets
       WHERE city_key = ANY($1)
+        AND COALESCE(variable, 'daily_high') = 'daily_high'
         AND market_date BETWEEN ($2::date - INTERVAL '1 day')
                             AND ($3::date + INTERVAL '10 days')
         AND (settlement_time IS NULL OR settlement_time > $2::timestamptz)`,

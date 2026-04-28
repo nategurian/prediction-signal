@@ -6,7 +6,7 @@ import {
   computeForecastErrorStats,
   type ForecastErrorSample,
 } from "@/lib/engine/calibration";
-import { getCityConfig, getAllCityKeys, sharedConfig } from "@/lib/config";
+import { getCityConfig, getAllSeriesConfigs, sharedConfig } from "@/lib/config";
 
 /**
  * Recompute per-city empirical forecast-error σ from settled trade postmortems.
@@ -35,11 +35,12 @@ export async function POST(req: Request) {
 
   try {
     const db = getSupabaseAdmin();
-    const cities = getAllCityKeys();
+    const seriesConfigs = getAllSeriesConfigs();
     const nowMs = Date.now();
 
     const results: Array<{
       city_key: string;
+      variable: string;
       sample_count: number;
       forecast_error_stdev: number;
       forecast_error_rmse: number;
@@ -50,24 +51,37 @@ export async function POST(req: Request) {
       dropped_target_mismatch?: number;
     }> = [];
 
-    for (const cityKey of cities) {
+    for (const series of seriesConfigs) {
+      const cityKey = series.cityKey;
+      const variable = series.variable;
       const cfg = getCityConfig(cityKey);
       const windowDays = cfg.calibrationWindowDays;
       const cutoffIso = new Date(
         nowMs - windowDays * 24 * 60 * 60 * 1000
       ).toISOString();
 
+      // Variable filter that preserves backwards compatibility: postmortems
+      // written before Phase 2a have no `variable` field — those are
+      // implicitly `daily_high`, so daily_high recalibration accepts both
+      // tagged and untagged rows. daily_low only accepts tagged rows.
+      const variableFilter =
+        variable === "daily_high"
+          ? `structured_json->>variable.eq.${variable},structured_json->>variable.is.null`
+          : `structured_json->>variable.eq.${variable}`;
+
       const { data, error } = await db
         .from("trade_postmortems")
         .select("structured_json, created_at")
         .gte("created_at", cutoffIso)
         .eq("structured_json->>city_key", cityKey)
+        .or(variableFilter)
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error(`recalibrate-sigma ${cityKey} fetch error:`, error);
+        console.error(`recalibrate-sigma ${cityKey}/${variable} fetch error:`, error);
         results.push({
           city_key: cityKey,
+          variable,
           sample_count: 0,
           forecast_error_stdev: 0,
           forecast_error_rmse: 0,
@@ -84,10 +98,20 @@ export async function POST(req: Request) {
       for (const row of data ?? []) {
         const s = (row as { structured_json: Record<string, unknown> | null }).structured_json;
         if (!s) continue;
-        const actual = Number(s.actual_high_temp);
+        // Prefer the variable-aware fields (Phase 2a), fall back to legacy
+        // *_high fields for postmortems written pre-refactor.
+        const actual = Number(
+          s.actual_value !== undefined && s.actual_value !== null
+            ? s.actual_value
+            : s.actual_high_temp
+        );
         const modelAtSignal = s.model_at_signal as Record<string, unknown> | null;
         const featureJson = modelAtSignal?.feature_json as Record<string, unknown> | null;
-        const forecast = Number(featureJson?.forecasted_high);
+        const forecast = Number(
+          featureJson?.forecasted_value !== undefined && featureJson?.forecasted_value !== null
+            ? featureJson.forecasted_value
+            : featureJson?.forecasted_high
+        );
         const marketDate = typeof s.market_date === "string" ? s.market_date : null;
         const forecastTargetDate =
           typeof featureJson?.forecast_target_date === "string"
@@ -128,6 +152,7 @@ export async function POST(req: Request) {
       // automatically falls back to ensemble σ.
       await upsertCityCalibration({
         city_key: cityKey,
+        variable,
         niche_key: sharedConfig.nicheKey,
         forecast_error_stdev: stats.stdev,
         forecast_error_rmse: stats.rmse,
@@ -140,6 +165,7 @@ export async function POST(req: Request) {
 
       results.push({
         city_key: cityKey,
+        variable,
         sample_count: stats.sample_count,
         forecast_error_stdev: Number(stats.stdev.toFixed(3)),
         forecast_error_rmse: Number(stats.rmse.toFixed(3)),

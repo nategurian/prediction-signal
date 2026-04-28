@@ -7,7 +7,7 @@ import {
   insertExternalDataSnapshot,
   getLatestExternalData,
 } from "@/lib/supabase/db";
-import { getAllCityKeys, getCityConfig, sharedConfig } from "@/lib/config";
+import { getAllCityKeys, getSeriesConfig, sharedConfig } from "@/lib/config";
 
 export async function POST(req: Request) {
   const authError = validateCronSecret(req);
@@ -27,7 +27,10 @@ export async function POST(req: Request) {
           ? (previous.normalized_json as Record<string, unknown>)
           : null;
 
-        const cityConfig = getCityConfig(cityKey);
+        // Phase 2a only fetches daily_high data, so the sigma floor used to
+        // shore up the ensemble σ comes from the daily_high series. Phase 2b
+        // will fetch lows alongside highs and apply per-variable floors.
+        const dailyHighSeries = getSeriesConfig(cityKey, "daily_high");
         const ensemble = await fetchEnsembleForecast(cityKey);
 
         const validation = validateForecastPayload({
@@ -47,7 +50,7 @@ export async function POST(req: Request) {
           forecast,
           previousNormalized,
           cityKey,
-          { ensemble, sigmaFloor: cityConfig.sigmaFloor }
+          { ensemble, sigmaFloor: dailyHighSeries.sigmaFloor }
         );
 
         const snapshot = await insertExternalDataSnapshot({
