@@ -15,6 +15,7 @@ import {
 import { generateSignalExplanation } from "@/lib/ai/explanations";
 import { openPaperTrade } from "@/lib/engine/simulation";
 import { getCityConfig, getSeriesConfig } from "@/lib/config";
+import { sendSignalToTradingBot } from "@/lib/notifications/tradingBot";
 
 /** Non-LLM line for Opportunities when we skip OpenAI (NO_TRADE). */
 function noTradeSummaryFromSignalData(data: {
@@ -37,6 +38,9 @@ export async function POST(req: Request) {
     const markets = await getActiveMarkets();
     let signalsCreated = 0;
     let tradesOpened = 0;
+    let webhooksDelivered = 0;
+    let webhooksFailed = 0;
+    let webhooksSkipped = 0;
 
     for (const market of markets) {
       const cityConfig = getCityConfig(market.city_key);
@@ -148,12 +152,37 @@ export async function POST(req: Request) {
       signalsCreated++;
 
       if (worthTrading && !hasOpenTrade) {
+        // Forward the signal to the live trading bot first. We don't gate
+        // the paper trade on this — the simulation must run regardless so
+        // backtest data stays continuous when the bot is offline.
+        const delivery = await sendSignalToTradingBot({ signal, snapshot, market });
+        if (delivery.skipped) {
+          webhooksSkipped++;
+        } else if (delivery.ok) {
+          webhooksDelivered++;
+          console.log(
+            `[run-signals] webhook ok signal=${signal.id} ticker=${market.ticker} status=${delivery.status}`
+          );
+        } else {
+          webhooksFailed++;
+          console.error(
+            `[run-signals] webhook failed signal=${signal.id} ticker=${market.ticker} status=${delivery.status ?? "n/a"} error=${delivery.error ?? "n/a"} response=${JSON.stringify(delivery.response)}`
+          );
+        }
+
         const trade = await openPaperTrade(signal, snapshot, market);
         if (trade) tradesOpened++;
       }
     }
 
-    return NextResponse.json({ ok: true, signals_created: signalsCreated, trades_opened: tradesOpened });
+    return NextResponse.json({
+      ok: true,
+      signals_created: signalsCreated,
+      trades_opened: tradesOpened,
+      webhooks_delivered: webhooksDelivered,
+      webhooks_failed: webhooksFailed,
+      webhooks_skipped: webhooksSkipped,
+    });
   } catch (err) {
     console.error("run-signals error:", err);
     return NextResponse.json({ error: "Failed to run signals" }, { status: 500 });
